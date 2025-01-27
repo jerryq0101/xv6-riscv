@@ -15,6 +15,7 @@
 #include "sleeplock.h"
 #include "file.h"
 #include "fcntl.h"
+#include "readcounterstate.h"
 
 // Fetch the nth word-sized system call argument as a file descriptor
 // and return both the descriptor and the corresponding struct file.
@@ -71,6 +72,8 @@ sys_read(void)
   struct file *f;
   int n;
   uint64 p;
+
+  increment_state();    // Injected read increment
 
   argaddr(1, &p);
   argint(2, &n);
