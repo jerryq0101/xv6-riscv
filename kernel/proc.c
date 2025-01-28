@@ -513,7 +513,9 @@ scheduler_lottery(void)
                 int total_tickets = 0;
                 for (int i = 0; i < NPROC; i++)
                 {
+                        acquire(&(proc[i].lock));
                         total_tickets+=proc[i].tickets;
+                        release(&(proc[i].lock));
                 }
 
                 
@@ -528,7 +530,6 @@ scheduler_lottery(void)
                 {
                         // Find a process to run
                         int random = lcg_random(total_tickets+1);
-                        int exists = 0;
                         
                         // Check if this is the winner
                         int cumulative = 0;
@@ -536,33 +537,29 @@ scheduler_lottery(void)
                         {
                                 if (p->tickets > 0)
                                 {
+                                        acquire(&p->lock);
                                         cumulative += p->tickets;
-                                        if (cumulative >= random)
+                                        if (cumulative >= random && p->state == RUNNABLE)
                                         {
-                                                exists = 1;
+                                                // Switch to chosen process.  It is the process's job
+                                                // to release its lock and then reacquire it
+                                                // before jumping back to us.
+                                                p->state = RUNNING;
+                                                c->proc = p;
+                                                swtch(&c->context, &p->context);
+
+                                                // Process is done running for now.
+                                                // It should have changed its p->state before coming back.
+                                                c->proc = 0;
+                                                found = 1;
+                                                release(&p->lock);
                                                 break;
                                         }
+                                        else 
+                                        {
+                                                release(&p->lock);
+                                        }
                                 }
-                        }
-
-                        if (exists)
-                        {
-                                acquire(&p->lock);
-                                if (p->state == RUNNABLE)        // Run p
-                                {
-                                        // Switch to chosen process.  It is the process's job
-                                        // to release its lock and then reacquire it
-                                        // before jumping back to us.
-                                        p->state = RUNNING;
-                                        c->proc = p;
-                                        swtch(&c->context, &p->context);
-
-                                        // Process is done running for now.
-                                        // It should have changed its p->state before coming back.
-                                        c->proc = 0;
-                                        found = 1;
-                                }
-                                release(&p->lock);
                         }
                 }
                 
