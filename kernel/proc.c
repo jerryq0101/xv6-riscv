@@ -5,6 +5,7 @@
 #include "spinlock.h"
 #include "proc.h"
 #include "defs.h"
+#include "pstat.h"
 
 struct cpu cpus[NCPU];
 
@@ -251,6 +252,9 @@ userinit(void)
 
   p->state = RUNNABLE;
 
+  // LOTTERY: default ticket number is 1
+  p->tickets = 1;
+
   release(&p->lock);
 }
 
@@ -295,6 +299,9 @@ fork(void)
     return -1;
   }
   np->sz = p->sz;
+
+  // LOTTERY: copy parent tickets to child tickets
+  np->tickets = p->tickets;
 
   // copy saved user registers.
   *(np->trapframe) = *(p->trapframe);
@@ -479,6 +486,95 @@ scheduler(void)
     }
   }
 }
+
+
+// LOTTERY IMPLEMENTATION
+
+static uint64 seed = 2231584;  // Should be initialized with something more random
+
+uint64 lcg_random(uint64 max) {
+    seed = (seed * 1103515245 + 12345) & 0x7fffffff;
+    return seed % max;
+}
+
+void 
+scheduler_lottery(void)
+{
+        struct proc *p;
+        struct cpu *c = mycpu();
+
+        c->proc = 0;
+        for (;;)
+        {
+                intr_on();
+                
+                int found = 0;
+                // Calculate the total number of tickets
+                int total_tickets = 0;
+                for (int i = 0; i < NPROC; i++)
+                {
+                        total_tickets+=proc[i].tickets;
+                }
+
+                
+                // While loop
+                        // Get a random number
+                        // Check who won
+                        // Get that process on the proc list
+                        // Check if its runnable
+                                // Proceed with switch operations, then break
+                
+                if (total_tickets > 0)
+                {
+                        // Find a process to run
+                        int random = lcg_random(total_tickets+1);
+                        int exists = 0;
+                        
+                        // Check if this is the winner
+                        int cumulative = 0;
+                        for (p = proc; p < &proc[NPROC]; p++)
+                        {
+                                if (p->tickets > 0)
+                                {
+                                        cumulative += p->tickets;
+                                        if (cumulative >= random)
+                                        {
+                                                exists = 1;
+                                                break;
+                                        }
+                                }
+                        }
+
+                        if (exists)
+                        {
+                                acquire(&p->lock);
+                                if (p->state == RUNNABLE)        // Run p
+                                {
+                                        // Switch to chosen process.  It is the process's job
+                                        // to release its lock and then reacquire it
+                                        // before jumping back to us.
+                                        p->state = RUNNING;
+                                        c->proc = p;
+                                        swtch(&c->context, &p->context);
+
+                                        // Process is done running for now.
+                                        // It should have changed its p->state before coming back.
+                                        c->proc = 0;
+                                        found = 1;
+                                }
+                                release(&p->lock);
+                        }
+                }
+                
+                if (found == 0)
+                {
+                        intr_on();
+                        asm volatile("wfi");
+                }
+        }
+}
+
+
 
 // Switch to scheduler.  Must hold only p->lock
 // and have changed proc->state. Saves and restores
