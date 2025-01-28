@@ -6,6 +6,7 @@
 #include "proc.h"
 #include "syscall.h"
 #include "defs.h"
+#include "pstat.h"
 
 // Fetch the uint64 at addr from the current process.
 int
@@ -102,6 +103,8 @@ extern uint64 sys_link(void);
 extern uint64 sys_mkdir(void);
 extern uint64 sys_close(void);
 extern uint64 sys_getreadcount(void);
+extern uint64 sys_settickets(void);
+extern uint64 sys_getpinfo(void);
 
 // An array mapping syscall numbers from syscall.h
 // to the function that handles the system call.
@@ -128,6 +131,8 @@ static uint64 (*syscalls[])(void) = {
 [SYS_mkdir]   sys_mkdir,
 [SYS_close]   sys_close,
 [SYS_getreadcount] sys_getreadcount,    // add to the available number of syscalls available
+[SYS_settickets] sys_settickets,
+[SYS_getpinfo] sys_getpinfo
 };
 
 void

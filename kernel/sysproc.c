@@ -6,6 +6,7 @@
 #include "spinlock.h"
 #include "proc.h"
 #include "readcounterstate.h"
+#include "pstat.h"
 
 uint64
 sys_exit(void)
@@ -26,6 +27,43 @@ uint64
 sys_fork(void)
 {
   return fork();
+}
+
+
+uint64
+sys_settickets(void)
+{
+        int n;
+        argint(0, &n);
+        if (n <= 0)     // Non valid ticket amount (Failed)
+        {
+                return -1;
+        }
+        // set current proc tickets to n
+        struct proc* curr = myproc();
+        if (curr == 0)          // None process (Failed)
+        {
+                return -1;
+        }
+        acquire(&(curr->lock));
+        curr->tickets = n;
+        release(&(curr->lock));
+        return 0;
+}
+
+uint64
+sys_getpinfo(void)
+{
+        uint64 addr;
+        // get the pointer argument
+        argaddr(0, &addr);
+        
+        if(addr == 0)  // Check NULL
+            return -1;
+
+        struct pstat *ps = (struct pstat*)addr;
+        getpinfo(ps);
+        return 0;
 }
 
 uint64

@@ -9,6 +9,8 @@ struct sleeplock;
 struct stat;
 struct superblock;
 
+#include "pstat.h"
+
 // bio.c
 void            binit(void);
 struct buf*     bread(uint, uint);
@@ -77,7 +79,7 @@ int             piperead(struct pipe*, uint64, int);
 int             pipewrite(struct pipe*, uint64, int);
 
 // printf.c
-int            printf(char*, ...) __attribute__ ((format (printf, 1, 2)));
+int             printf(char*, ...) __attribute__ ((format (printf, 1, 2)));
 void            panic(char*) __attribute__((noreturn));
 void            printfinit(void);
 
@@ -94,12 +96,14 @@ int             killed(struct proc*);
 void            setkilled(struct proc*);
 struct cpu*     mycpu(void);
 struct cpu*     getmycpu(void);
+void            getpinfo(struct pstat*);                             // LOTTERY
 struct proc*    myproc();
 void            procinit(void);
 void            scheduler(void) __attribute__((noreturn));
-void            scheduler_lottery(void) __attribute__((noreturn));
+void            scheduler_lottery(void) __attribute__((noreturn));      // LOTTERY
 void            sched(void);
 void            sleep(void*, struct spinlock*);
+int             settickets(int);                                        // LOTTERY
 void            userinit(void);
 int             wait(uint64);
 void            wakeup(void*);

@@ -143,6 +143,7 @@ UPROGS=\
 	$U/_zombie\
 	$U/_hello\
 	$U/_getreadcount\
+	$U/_test_set_tix\
 
 fs.img: mkfs/mkfs README $(UPROGS)
 	mkfs/mkfs fs.img README $(UPROGS)

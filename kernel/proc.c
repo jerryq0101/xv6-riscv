@@ -170,6 +170,9 @@ freeproc(struct proc *p)
   p->killed = 0;
   p->xstate = 0;
   p->state = UNUSED;
+  // LOTTERY
+  p->tickets = 0;
+  p->ticks_ran = 0;
 }
 
 // Create a user page table for a given process, with no user memory,
@@ -229,6 +232,49 @@ uchar initcode[] = {
   0x00, 0x00, 0x00, 0x00
 };
 
+// LOTTERY: updating statistics
+// Assume ps has already been checked by sys_getpinfo and is safe
+void
+getpinfo(struct pstat *ps)
+{
+        struct proc *p;
+        int i = 0;
+
+        int inuse[NPROC], tickets[NPROC], pid[NPROC], ticks[NPROC];
+        
+        for (p = proc; p < &proc[NPROC]; p++)
+        {
+                acquire(&p->lock);  // Lock before accessing process
+
+                if (p->state != UNUSED)                             // Checking defined 
+                {
+                        inuse[i] = 1;
+                }
+                else 
+                {
+                        inuse[i] = 0;
+                }
+
+                tickets[i] = p->tickets;
+                pid[i] = p->pid;
+                ticks[i] = p->ticks_ran;
+
+                release(&p->lock);  // Release after done with this process
+                i++;
+        }
+
+        if (
+                either_copyout(1, (uint64) ps->inuse, inuse, sizeof(inuse)) < 0 ||
+                either_copyout(1, (uint64) ps->tickets, tickets, sizeof(tickets)) < 0 ||
+                either_copyout(1, (uint64) ps->pid, pid, sizeof(pid)) < 0 ||
+                either_copyout(1, (uint64) ps->ticks, ticks, sizeof(ticks)) < 0
+        )
+        {
+                printf("Copy from kernel data to user space failed\n");
+        }
+}
+
+
 // Set up first user process.
 void
 userinit(void)
@@ -254,6 +300,7 @@ userinit(void)
 
   // LOTTERY: default ticket number is 1
   p->tickets = 1;
+  p->ticks_ran = 0;
 
   release(&p->lock);
 }
@@ -302,6 +349,7 @@ fork(void)
 
   // LOTTERY: copy parent tickets to child tickets
   np->tickets = p->tickets;
+  np->ticks_ran = 0;
 
   // copy saved user registers.
   *(np->trapframe) = *(p->trapframe);
@@ -546,10 +594,13 @@ scheduler_lottery(void)
                                                 // before jumping back to us.
                                                 p->state = RUNNING;
                                                 c->proc = p;
+                                                int start = ticks;
                                                 swtch(&c->context, &p->context);
 
                                                 // Process is done running for now.
                                                 // It should have changed its p->state before coming back.
+                                                int end = ticks;                // increment the number of ticks
+                                                p->ticks_ran += end-start;
                                                 c->proc = 0;
                                                 found = 1;
                                                 release(&p->lock);
