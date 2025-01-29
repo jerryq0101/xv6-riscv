@@ -96,7 +96,7 @@ int             killed(struct proc*);
 void            setkilled(struct proc*);
 struct cpu*     mycpu(void);
 struct cpu*     getmycpu(void);
-void            getpinfo(struct pstat*);                             // LOTTERY
+void            getpinfo(struct pstat*);                                // LOTTERY
 struct proc*    myproc();
 void            procinit(void);
 void            scheduler(void) __attribute__((noreturn));

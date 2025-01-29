@@ -170,7 +170,7 @@ freeproc(struct proc *p)
   p->killed = 0;
   p->xstate = 0;
   p->state = UNUSED;
-  // LOTTERY
+  // LOTTERY Variable Init
   p->tickets = 0;
   p->ticks_ran = 0;
 }
@@ -537,8 +537,7 @@ scheduler(void)
 
 
 // LOTTERY IMPLEMENTATION
-
-static uint64 seed = 2231584;  // Should be initialized with something more random
+static uint64 seed = 2231584;
 
 uint64 lcg_random(uint64 max) {
     seed = (seed * 1103515245 + 12345) & 0x7fffffff;
@@ -565,14 +564,6 @@ scheduler_lottery(void)
                         total_tickets+=proc[i].tickets;
                         release(&(proc[i].lock));
                 }
-
-                
-                // While loop
-                        // Get a random number
-                        // Check who won
-                        // Get that process on the proc list
-                        // Check if its runnable
-                                // Proceed with switch operations, then break
                 
                 if (total_tickets > 0)
                 {
@@ -599,7 +590,7 @@ scheduler_lottery(void)
 
                                                 // Process is done running for now.
                                                 // It should have changed its p->state before coming back.
-                                                int end = ticks;                // increment the number of ticks
+                                                int end = ticks;                // increment the number of ticks ran
                                                 p->ticks_ran += end-start;
                                                 c->proc = 0;
                                                 found = 1;
