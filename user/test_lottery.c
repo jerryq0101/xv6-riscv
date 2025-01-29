@@ -50,20 +50,6 @@ int main(int argc, char *argv[])
                 getpinfo(&ps);
                 for (int i = 0; i < NPROC; i++)
                 {
-                        
-                        // if (ps.pid[i] == proc_1)
-                        // {
-                        //         printf("Process 1 (Tickets: %d), (Ticks: %d) \n", ps.tickets[i], ps.ticks[i]);
-                        // }
-                        // if (ps.pid[i] == proc_2)
-                        // {
-                        //         printf("Process 2 (Tickets: %d), (Ticks: %d) \n", ps.tickets[i], ps.ticks[i]);
-                        // }
-                        // if (ps.pid[i] == proc_3)
-                        // {
-                        //         printf("Process 3 (Tickets: %d), (Ticks: %d) \n", ps.tickets[i], ps.ticks[i]);
-                        // }
-
                         if (ps.pid[i] == proc_1)
                         {
                                 printf("%d\t", ps.ticks[i]);
