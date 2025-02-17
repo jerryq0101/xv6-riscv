@@ -92,7 +92,7 @@ usertrap(void)
         }
         else
         {
-                printf("usertrap(): invalid page read pid=%d va=%p\n", p->pid, va);
+                printf("usertrap(): invalid page read pid=%d va=%p\n", p->pid, (void *) va);
                 p->killed = 1;
         }
   }

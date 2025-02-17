@@ -187,11 +187,19 @@ void uvmunmap(pagetable_t pagetable, uint64 va, uint64 npages, int do_free)
         {
                 if ((pte = walk(pagetable, a, 0)) == 0)
                         panic("uvmunmap: walk");
-                if ((*pte & PTE_V) == 0)
+                // Only not mapped if:
+                // 1. Both PTE_V and PTE_D are 0
+                // if PTE_V = 1 then its ok (PTE_D = 0)
+                // if PTE_D = 1 then its also ok (PTE_V = 0)
+                if ((*pte & PTE_V) == 0 && (*pte & PTE_D) == 0)
                         panic("uvmunmap: not mapped");
                 if (PTE_FLAGS(*pte) == PTE_V)
                         panic("uvmunmap: not a leaf");
-                if (do_free)
+
+                // Only free physical memory if:
+                // 1. do_free is set
+                // 2. page is valid (already allocated)
+                if (do_free && (*pte & PTE_V))
                 {
                         uint64 pa = PTE2PA(*pte);
                         kfree((void *)pa);
@@ -260,11 +268,9 @@ void uvmfirst(pagetable_t pagetable, uchar *src, uint sz)
 // }
 
 // Demand Paging: Allocate PTEs, without allocating physical memory yet
-// TODO: do the same thing as uvmalloc, but just without physical allocation of pages
 uint64
 uvmalloc(pagetable_t pagetable, uint64 oldsz, uint64 newsz, int xperm)
 {
-        char *mem;
         uint64 a;
 
         if (newsz < oldsz)
@@ -273,7 +279,7 @@ uvmalloc(pagetable_t pagetable, uint64 oldsz, uint64 newsz, int xperm)
         oldsz = PGROUNDUP(oldsz);
         for (a = oldsz; a < newsz; a += PGSIZE)
         {
-                pte_t *pte = walk(pagetable, a, 1);
+                pte_t *pte = walk(pagetable, a, 1);     // allocates for PTE space
                 if (pte == 0)
                 {
                         return 0;

@@ -140,6 +140,35 @@ exec(char *path, char **argv)
   return -1;
 }
 
+// // Load a program segment into pagetable at virtual address va.
+// // va must be page-aligned
+// // and the pages from va to va+sz must already be mapped.
+// // Returns 0 on success, -1 on failure.
+// static int
+// loadseg(pagetable_t pagetable, uint64 va, struct inode *ip, uint offset, uint sz)
+// {
+//   uint i, n;
+//   uint64 pa;
+
+//   for(i = 0; i < sz; i += PGSIZE){
+//     pa = walkaddr(pagetable, va + i);
+//     if(pa == 0)
+//       panic("loadseg: address should exist");
+//     if(sz - i < PGSIZE)
+//       n = sz - i;
+//     else
+//       n = PGSIZE;
+//     if(readi(ip, 0, (uint64)pa, offset+i, n) != n)
+//       return -1;
+//   }
+  
+//   return 0;
+// }
+
+// loadseg, Demand Paging version: 
+// Assumption: Before call, uvmalloc has mapped pages to empty physical addresses for demand paging
+// Here, we are dealing with program data, so we need to allocate physical memory immediately for executing the program
+
 // Load a program segment into pagetable at virtual address va.
 // va must be page-aligned
 // and the pages from va to va+sz must already be mapped.
@@ -147,20 +176,51 @@ exec(char *path, char **argv)
 static int
 loadseg(pagetable_t pagetable, uint64 va, struct inode *ip, uint offset, uint sz)
 {
-  uint i, n;
-  uint64 pa;
+        uint i, n;
 
-  for(i = 0; i < sz; i += PGSIZE){
-    pa = walkaddr(pagetable, va + i);
-    if(pa == 0)
-      panic("loadseg: address should exist");
-    if(sz - i < PGSIZE)
-      n = sz - i;
-    else
-      n = PGSIZE;
-    if(readi(ip, 0, (uint64)pa, offset+i, n) != n)
-      return -1;
-  }
-  
-  return 0;
+        // loop through each page, and then allocate for that page and store the data there
+        for(i = 0; i < sz; i += PGSIZE){
+        //     pa = walkaddr(pagetable, va + i);
+        //     if(pa == 0)
+        //       panic("loadseg: address should exist");
+        //     if(sz - i < PGSIZE)
+        //       n = sz - i;
+        //     else
+        //       n = PGSIZE;
+        //     if(readi(ip, 0, (uint64)pa, offset+i, n) != n)
+        //       return -1;
+                pte_t *pte = walk(pagetable, (uint64) (va + i), 0);
+                if (pte == 0)
+                {
+                        panic("loadseg: page table entry should exist (though pa should be not allocated yet)");
+                }
+                
+                char *mem = kalloc();   // physical address
+                if (mem == 0)           // physical mem alloc failed 
+                {
+                        return -1;
+                }
+                
+                if (sz - i < PGSIZE)            // if we are at the end
+                {
+                        n = sz - i;
+                }
+                else
+                {
+                        n = PGSIZE;
+                }
+
+                if (readi(ip, 0, (uint64) mem, offset+i, n) != n)
+                {
+                        // if read fails
+                        kfree(mem);
+                        return -1;
+                }
+
+                // Update PTE since this page is now allocated
+                int perm = ((*pte) | 0x3FF) & ~PTE_D;           // set to non demand paging
+                perm = perm | PTE_V;                            // set to be valid
+                *pte = PA2PTE(mem) | perm;
+        }
+        return 0;
 }
