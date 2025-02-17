@@ -66,7 +66,7 @@ usertrap(void)
 
     syscall();
   } 
-  else if (r_scause() == 13 || r_scause() == 15)
+  else if (r_scause() == 13 || r_scause() == 15)        // Demand Paging Extension
   {
         // Reading an invalid page or writing an invalid page
         uint64 va = r_stval();

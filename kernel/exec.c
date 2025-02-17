@@ -168,7 +168,6 @@ exec(char *path, char **argv)
 // loadseg, Demand Paging version: 
 // Assumption: Before call, uvmalloc has mapped pages to empty physical addresses for demand paging
 // Here, we are dealing with program data, so we need to allocate physical memory immediately for executing the program
-
 // Load a program segment into pagetable at virtual address va.
 // va must be page-aligned
 // and the pages from va to va+sz must already be mapped.

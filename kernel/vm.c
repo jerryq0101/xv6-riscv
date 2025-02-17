@@ -187,6 +187,7 @@ void uvmunmap(pagetable_t pagetable, uint64 va, uint64 npages, int do_free)
         {
                 if ((pte = walk(pagetable, a, 0)) == 0)
                         panic("uvmunmap: walk");
+                // Demand Paging Modification
                 // Only not mapped if:
                 // 1. Both PTE_V and PTE_D are 0
                 // if PTE_V = 1 then its ok (PTE_D = 0)
