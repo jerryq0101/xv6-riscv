@@ -65,7 +65,38 @@ usertrap(void)
     intr_on();
 
     syscall();
-  } else if((which_dev = devintr()) != 0){
+  } 
+  else if (r_scause() == 13 || r_scause() == 15)
+  {
+        // Reading an invalid page or writing an invalid page
+        uint64 va = r_stval();
+        pte_t *pte = walk(p->pagetable, va, 0);
+
+        if (pte != 0 && (*pte & PTE_D))         // Demand Paging Case
+        {
+                // do demand paging allocation
+                char *mem = kalloc();
+                if (mem == 0)
+                {
+                        p->killed = 1;
+                        return;
+                }
+
+                memset(mem, 0, PGSIZE);
+
+                int perm = ((*pte) & 0x3FF & ~PTE_D);
+                perm = perm | PTE_V;
+
+                uint64 pa = (uint64) mem;       // physical address
+                *pte = PTE2PA(pa) | perm;
+        }
+        else
+        {
+                printf("usertrap(): invalid page read pid=%d va=%p\n", p->pid, va);
+                p->killed = 1;
+        }
+  }
+  else if((which_dev = devintr()) != 0){
     // ok
   } else {
     printf("usertrap(): unexpected scause 0x%lx pid=%d\n", r_scause(), p->pid);
