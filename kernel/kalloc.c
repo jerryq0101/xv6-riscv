@@ -8,6 +8,7 @@
 #include "spinlock.h"
 #include "riscv.h"
 #include "defs.h"
+#include "kalloc.h"
 
 void freerange(void *pa_start, void *pa_end);
 
@@ -78,5 +79,35 @@ kalloc(void)
 
   if(r)
     memset((char*)r, 5, PGSIZE); // fill with junk
+  return (void*)r;
+}
+
+// Demand Paging: Accessing PTE setup
+// Add this new function
+void*
+kalloc_and_map(pagetable_t pagetable, uint64 va, pte_t *pte)
+{
+  struct run *r;
+
+  acquire(&kmem.lock);
+  
+  // Verify PTE is still demand-paged
+  if ((*pte & PTE_D) == 0) {
+    release(&kmem.lock);
+    return 0;
+  }
+
+  r = kmem.freelist;
+  if(r) {
+    kmem.freelist = r->next;
+    memset((char*)r, 0, PGSIZE);
+    
+    // Update PTE atomically
+    int perm = PTE_FLAGS(*pte);
+    perm = (perm & ~PTE_D) | PTE_V;
+    *pte = PA2PTE((uint64)r) | perm;
+  }
+  
+  release(&kmem.lock);
   return (void*)r;
 }

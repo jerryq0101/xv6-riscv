@@ -5,6 +5,7 @@
 #include "spinlock.h"
 #include "proc.h"
 #include "defs.h"
+#include "kalloc.h"
 
 struct spinlock tickslock;
 uint ticks;
@@ -69,31 +70,34 @@ usertrap(void)
   else if (r_scause() == 13 || r_scause() == 15)        // Demand Paging Extension
   {
         // Reading an invalid page or writing an invalid page
-        uint64 va = r_stval();
+        uint64 va = PGROUNDDOWN(r_stval());
         pte_t *pte = walk(p->pagetable, va, 0);
 
-        if (pte != 0 && (*pte & PTE_D))         // Demand Paging Case
+        if (pte == 0)
+        {
+                printf("usertrap(): page not mapped pid=%d va=%p\n", p->pid, (void *) va);
+                acquire(&p->lock);
+                p->killed = 1;
+                release(&p->lock);
+        }
+        else if (pte != 0 && (*pte & PTE_D))         // Demand Paging Case
         {
                 // do demand paging allocation
-                char *mem = kalloc();
+                void *mem = kalloc_and_map(p->pagetable, va, pte);
                 if (mem == 0)
                 {
+                        acquire(&p->lock);
                         p->killed = 1;
+                        release(&p->lock);
                         return;
                 }
-
-                memset(mem, 0, PGSIZE);
-
-                int perm = ((*pte) & 0x3FF & ~PTE_D);
-                perm = perm | PTE_V;
-
-                uint64 pa = (uint64) mem;       // physical address
-                *pte = PTE2PA(pa) | perm;
         }
         else
         {
                 printf("usertrap(): invalid page read pid=%d va=%p\n", p->pid, (void *) va);
+                acquire(&p->lock);
                 p->killed = 1;
+                release(&p->lock);
         }
   }
   else if((which_dev = devintr()) != 0){

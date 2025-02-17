@@ -288,7 +288,7 @@ uvmalloc(pagetable_t pagetable, uint64 oldsz, uint64 newsz, int xperm)
 
                 // Set xperm | PTE_D but clear PTE_V to trigger a trap
                 // 0 signifies we don't have a physical address yet
-                *pte = (0 | xperm | PTE_D) & ~PTE_V;
+                *pte = (0 | xperm | PTE_D | PTE_R | PTE_U) & ~PTE_V;
         }
         return newsz;
 }

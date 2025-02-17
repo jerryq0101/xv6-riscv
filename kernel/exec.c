@@ -217,8 +217,8 @@ loadseg(pagetable_t pagetable, uint64 va, struct inode *ip, uint offset, uint sz
                 }
 
                 // Update PTE since this page is now allocated
-                int perm = ((*pte) | 0x3FF) & ~PTE_D;           // set to non demand paging
-                perm = perm | PTE_V;                            // set to be valid
+                int perm = PTE_FLAGS(*pte);           // set to non demand paging
+                perm = (perm & ~PTE_D) | PTE_V;                            // set to be valid
                 *pte = PA2PTE(mem) | perm;
         }
         return 0;
