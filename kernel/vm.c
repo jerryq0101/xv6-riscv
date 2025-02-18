@@ -382,7 +382,7 @@ int uvmcopy(pagetable_t old, pagetable_t new, uint64 sz)
         uint flags;
         char *mem;
 
-        printf("Process creation:\n");
+        // printf("Process creation:\n");
         for (i = 0; i < sz; i += PGSIZE)
         {
                 if ((pte = walk(old, i, 0)) == 0){
@@ -421,7 +421,7 @@ int uvmcopy(pagetable_t old, pagetable_t new, uint64 sz)
                 {
                         panic("uvmcopy: page not present");
                 }
-                printf("Child pte %lx \n", *walk(new, i, 1));
+                // printf("Child pte %lx \n", *walk(new, i, 1));
         }
         return 0;
 
@@ -485,7 +485,6 @@ int copyout(pagetable_t pagetable, uint64 dstva, char *src, uint64 len)
 // Copy from user to kernel.
 // Copy len bytes to dst from virtual address srcva in a given page table.
 // Return 0 on success, -1 on error.
-// TODO: Changes here
 int copyin(pagetable_t pagetable, char *dst, uint64 srcva, uint64 len)
 {
         uint64 n, va0, pa0;
