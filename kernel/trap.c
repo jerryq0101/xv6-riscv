@@ -17,6 +17,8 @@ void kernelvec();
 
 extern int devintr();
 
+void access_trap_handler(void);
+
 void
 trapinit(void)
 {
@@ -34,53 +36,77 @@ trapinithart(void)
 // handle an interrupt, exception, or system call from user space.
 // called from trampoline.S
 //
-void
-usertrap(void)
+void usertrap(void)
 {
-  int which_dev = 0;
+        int which_dev = 0;
 
-  if((r_sstatus() & SSTATUS_SPP) != 0)
-    panic("usertrap: not from user mode");
+        if ((r_sstatus() & SSTATUS_SPP) != 0)
+                panic("usertrap: not from user mode");
 
-  // send interrupts and exceptions to kerneltrap(),
-  // since we're now in the kernel.
-  w_stvec((uint64)kernelvec);
+        // send interrupts and exceptions to kerneltrap(),
+        // since we're now in the kernel.
+        w_stvec((uint64)kernelvec);
 
-  struct proc *p = myproc();
-  
-  // save user program counter.
-  p->trapframe->epc = r_sepc();
-  
-  if(r_scause() == 8){
-    // system call
+        struct proc *p = myproc();
 
-    if(killed(p))
-      exit(-1);
+        // save user program counter.
+        p->trapframe->epc = r_sepc();
 
-    // sepc points to the ecall instruction,
-    // but we want to return to the next instruction.
-    p->trapframe->epc += 4;
+        // Verify this is a user address
+        uint64 va = r_stval();
+        if (va >= p->sz)
+        {
+                setkilled(p);
+                return;
+        }
 
-    // an interrupt will change sepc, scause, and sstatus,
-    // so enable only now that we're done with those registers.
-    intr_on();
+        if (r_scause() == 8)
+        {
+                // system call
+                if (killed(p))
+                        exit(-1);
 
-    syscall();
-  } 
-  else if((which_dev = devintr()) != 0){
-    // ok
-  }
-  else if (r_scause() >= 12 && r_scause() <= 15)        // Page fault cases
-  {
+                // sepc points to the ecall instruction,
+                // but we want to return to the next instruction.
+                p->trapframe->epc += 4;
+
+                // an interrupt will change sepc, scause, and sstatus,
+                // so enable only now that we're done with those registers.
+                intr_on();
+
+                syscall();
+        }
+        else if ((which_dev = devintr()) != 0)
+        {
+                // ok
+        }
+        else if (r_scause() == 12 || r_scause() == 15 || r_scause() == 13) // Page fault cases
+        {
+                access_trap_handler();
+        }
+        else
+        {
+                printf("usertrap(): unexpected scause 0x%lx pid=%d\n", r_scause(), p->pid);
+                printf("            sepc=0x%lx stval=0x%lx\n", r_sepc(), r_stval());
+                setkilled(p);
+        }
+
+        if (killed(p))
+                exit(-1);
+
+        // give up the CPU if this is a timer interrupt.
+        if (which_dev == 2)
+                yield();
+
+        usertrapret();
+}
+
+void
+access_trap_handler(void)
+{
         // Reading an invalid page or writing an invalid page
         uint64 va = r_stval();
-        
-        // Verify this is a user address
-        if(va >= MAXVA || va < PGROUNDDOWN(p->trapframe->sp)) {
-            printf("usertrap(): invalid va access pid=%d va=%p\n", p->pid, (void*)va);
-            setkilled(p);
-            return;
-        }
+        struct proc *p = myproc();
 
         // Page align the faulting address
         va = PGROUNDDOWN(va);
@@ -89,51 +115,35 @@ usertrap(void)
         pte_t *pte = walk(p->pagetable, va, 0);
         
         if(pte == 0) {
-            // No PTE exists - this is an invalid access
-            printf("usertrap(): page not mapped pid=%d va=%p\n", p->pid, (void*)va);
-            setkilled(p);
-            return;
+                // No PTE exists - this is an invalid access
+                printf("usertrap(): page not mapped pid=%d va=%p\n", p->pid, (void*)va);
+                setkilled(p);
+                return;
         }
 
         // Check if this is actually a demand paging case
         if((*pte & PTE_U) && (*pte & PTE_D) && !(*pte & PTE_V)) {
-            // This is a valid demand paging case
-            // Ensure we're not in an interrupt context
-            if(intr_get()) {
-                printf("usertrap(): page fault in interrupt context\n");
-                setkilled(p);
-                return;
-            }
-            
-            // Allocate and map the page
-            void *mem = kalloc_and_map(p->pagetable, pte);
-            if(mem == 0) {
-                printf("usertrap(): kalloc failed pid=%d va=%p\n", p->pid, (void*)va);
-                setkilled(p);
-                return;
-            }
+                // This is a valid demand paging case
+                // Ensure we're not in an interrupt context
+                if(intr_get()) {
+                        printf("usertrap(): page fault in interrupt context\n");
+                        setkilled(p);
+                        return;
+                }
+                
+                // Allocate and map the page
+                void *mem = kalloc_and_map(p->pagetable, pte);
+                if(mem == 0) {
+                        printf("usertrap(): kalloc failed pid=%d va=%p\n", p->pid, (void*)va);
+                        setkilled(p);
+                        return;
+                }
         } else {
-            // Not a demand paging case - invalid access
-            printf("usertrap(): invalid page access pid=%d va=%p pte=%p\n", 
-                   p->pid, (void*)va, (void*)*pte);
-            setkilled(p);
-            return;
+                // Not a demand paging case - invalid access
+                printf("usertrap(): invalid page access pid=%d va=%p pte=%p\n", p->pid, (void*)va, (void*)*pte);
+                setkilled(p);
+                return;
         }
-  }
-  else {
-    printf("usertrap(): unexpected scause 0x%lx pid=%d\n", r_scause(), p->pid);
-    printf("            sepc=0x%lx stval=0x%lx\n", r_sepc(), r_stval());
-    setkilled(p);
-  }
-
-  if(killed(p))
-    exit(-1);
-
-  // give up the CPU if this is a timer interrupt.
-  if(which_dev == 2)
-    yield();
-
-  usertrapret();
 }
 
 //

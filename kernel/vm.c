@@ -190,20 +190,17 @@ void uvmunmap(pagetable_t pagetable, uint64 va, uint64 npages, int do_free)
         for (a = va; a < va + npages * PGSIZE; a += PGSIZE)
         {
                 if ((pte = walk(pagetable, a, 0)) == 0)
+                {
                         panic("uvmunmap: walk");
-                // Demand Paging Modification
-                // Only not mapped if:
-                // 1. Both PTE_V and PTE_D are 0
-                // if PTE_V = 1 then its ok (PTE_D = 0)
-                // if PTE_D = 1 then its also ok (PTE_V = 0)
-                if ((*pte & PTE_V) == 0 && (*pte & PTE_D) == 0)
+                }
+                if (*pte == 0)
+                {
                         panic("uvmunmap: not mapped");
+                }
                 if (PTE_FLAGS(*pte) == PTE_V)
+                {
                         panic("uvmunmap: not a leaf");
-
-                // Only free physical memory if:
-                // 1. do_free is set
-                // 2. page is valid (already allocated)
+                }
                 if (do_free && (*pte & PTE_V))
                 {
                         uint64 pa = PTE2PA(*pte);
@@ -483,11 +480,16 @@ int copyout(pagetable_t pagetable, uint64 dstva, char *src, uint64 len)
 int copyin(pagetable_t pagetable, char *dst, uint64 srcva, uint64 len)
 {
         uint64 n, va0, pa0;
+        pte_t *pte;
 
         while (len > 0)
         {
                 va0 = PGROUNDDOWN(srcva);
-                pa0 = PTE2PA(*walkaddr_demand_paged(pagetable, va0));
+                pte = walkaddr_demand_paged(pagetable, va0);
+                if (pte == 0 || (*pte & PTE_U) == 0)
+                    return -1;
+
+                pa0 = PTE2PA(*pte);
                 if (pa0 == 0)
                         return -1;
                 n = PGSIZE - (srcva - va0);
@@ -509,12 +511,17 @@ int copyin(pagetable_t pagetable, char *dst, uint64 srcva, uint64 len)
 int copyinstr(pagetable_t pagetable, char *dst, uint64 srcva, uint64 max)
 {
         uint64 n, va0, pa0;
+        pte_t *pte;
         int got_null = 0;
 
         while (got_null == 0 && max > 0)
         {
                 va0 = PGROUNDDOWN(srcva);
-                pa0 = PTE2PA(*walkaddr_demand_paged(pagetable, va0));
+                pte = walkaddr_demand_paged(pagetable, va0); // Use demand paging aware version
+                if (pte == 0 || (*pte & PTE_U) == 0)
+                    return -1;
+                
+                pa0 = PTE2PA(*pte);
                 if (pa0 == 0)
                         return -1;
                 n = PGSIZE - (srcva - va0);
@@ -567,13 +574,14 @@ walkaddr_demand_paged(pagetable_t pagetable, uint64 va)
         pte = walk(pagetable, va, 0);
         if (pte == 0)
                 return 0;
-        if ((*pte & PTE_V) == 0 && (*pte & PTE_D) == 0)         // Case: Invalid and non demand paged
-                return 0;
-        if ((*pte & PTE_U) == 0)
-                return 0;
         if ((*pte & PTE_V) == 0 && (*pte & PTE_D) != 0)         // Case: Invalid and Demand Paged
         {
                 kalloc_and_map(pagetable, pte);    // allocate physical memory for the pte
         }
+        if ((*pte & PTE_V) == 0)
+                return 0;
+        if ((*pte & PTE_U) == 0)
+                return 0;
+        
         return pte;
 }
