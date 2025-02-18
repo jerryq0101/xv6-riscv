@@ -82,10 +82,9 @@ kalloc(void)
   return (void*)r;
 }
 
-// Demand Paging: Accessing PTE setup
-// Add this new function
-void*
-kalloc_and_map(pagetable_t pagetable, uint64 va, pte_t *pte)
+// Demand Paging: Allocate physical memory for the demand paged PTE and change permissions accordingly
+void *
+kalloc_and_map(pagetable_t pagetable, pte_t *pte)
 {
   struct run *r;
 

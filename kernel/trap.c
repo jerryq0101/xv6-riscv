@@ -106,7 +106,7 @@ usertrap(void)
             }
             
             // Allocate and map the page
-            void *mem = kalloc_and_map(p->pagetable, va, pte);
+            void *mem = kalloc_and_map(p->pagetable, pte);
             if(mem == 0) {
                 printf("usertrap(): kalloc failed pid=%d va=%p\n", p->pid, (void*)va);
                 setkilled(p);

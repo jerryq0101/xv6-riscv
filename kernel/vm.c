@@ -16,6 +16,9 @@ extern char etext[]; // kernel.ld sets this to end of kernel code.
 
 extern char trampoline[]; // trampoline.S
 
+pte_t *
+walkaddr_demand_paged(pagetable_t pagetable, uint64 va);
+
 // Make a direct-map page table for the kernel.
 pagetable_t
 kvmmake(void)
@@ -454,20 +457,13 @@ int copyout(pagetable_t pagetable, uint64 dstva, char *src, uint64 len)
                 va0 = PGROUNDDOWN(dstva);
                 if (va0 >= MAXVA)
                         return -1;
-                pte = walk(pagetable, va0, 0);
+                pte = walkaddr_demand_paged(pagetable, va0);
                 if (pte == 0 || (*pte & PTE_U) == 0 || (*pte & PTE_W) == 0 || ((*pte & PTE_D) == 0 && (*pte & PTE_V) == 0) || ((*pte & PTE_D) != 0 && (*pte & PTE_V) != 0))     // Demand Paging: Checks for cases where D and V are not valid
                 {        
                         return -1;
                 }
                 
                 pa0 = PTE2PA(*pte);                             // the physical address
-                if (pa0 == 0)                                   // if pa0 is not allocated
-                {
-                        // allocate physical memory for it
-                        kalloc_and_map(pagetable, va0, pte);    // allocate physical memory for this
-                        pa0 = PTE2PA(*pte);                     // update the physical address
-                }
-
                 n = PGSIZE - (dstva - va0);
                 if (n > len)
                         n = len;
@@ -491,7 +487,7 @@ int copyin(pagetable_t pagetable, char *dst, uint64 srcva, uint64 len)
         while (len > 0)
         {
                 va0 = PGROUNDDOWN(srcva);
-                pa0 = walkaddr(pagetable, va0);
+                pa0 = PTE2PA(*walkaddr_demand_paged(pagetable, va0));
                 if (pa0 == 0)
                         return -1;
                 n = PGSIZE - (srcva - va0);
@@ -518,7 +514,7 @@ int copyinstr(pagetable_t pagetable, char *dst, uint64 srcva, uint64 max)
         while (got_null == 0 && max > 0)
         {
                 va0 = PGROUNDDOWN(srcva);
-                pa0 = walkaddr(pagetable, va0);
+                pa0 = PTE2PA(*walkaddr_demand_paged(pagetable, va0));
                 if (pa0 == 0)
                         return -1;
                 n = PGSIZE - (srcva - va0);
@@ -554,4 +550,30 @@ int copyinstr(pagetable_t pagetable, char *dst, uint64 srcva, uint64 max)
         {
                 return -1;
         }
+}
+
+
+// walkaddr_demand_paged
+// if finds a demand paged PTE, then allocates for it and returns the pte pointer
+// else, return the pte pointer
+pte_t *
+walkaddr_demand_paged(pagetable_t pagetable, uint64 va)
+{
+        pte_t *pte;
+
+        if (va >= MAXVA)
+                return 0;
+
+        pte = walk(pagetable, va, 0);
+        if (pte == 0)
+                return 0;
+        if ((*pte & PTE_V) == 0 && (*pte & PTE_D) == 0)         // Case: Invalid and non demand paged
+                return 0;
+        if ((*pte & PTE_U) == 0)
+                return 0;
+        if ((*pte & PTE_V) == 0 && (*pte & PTE_D) != 0)         // Case: Invalid and Demand Paged
+        {
+                kalloc_and_map(pagetable, pte);    // allocate physical memory for the pte
+        }
+        return pte;
 }
