@@ -5,6 +5,7 @@
 #include "riscv.h"
 #include "defs.h"
 #include "fs.h"
+#include "kalloc.h"
 
 /*
  * the kernel's page table.
@@ -251,26 +252,30 @@ void uvmfirst(pagetable_t pagetable, uchar *src, uint sz)
 //         oldsz = PGROUNDUP(oldsz);
 //         for (a = oldsz; a < newsz; a += PGSIZE)
 //         {
-//                 mem = kalloc();
-//                 if (mem == 0)
-//                 {
-//                         uvmdealloc(pagetable, a, oldsz);
-//                         return 0;
-//                 }
-//                 memset(mem, 0, PGSIZE);
-//                 if (mappages(pagetable, a, PGSIZE, (uint64)mem, PTE_R | PTE_U | xperm) != 0)
-//                 {
-//                         kfree(mem);
-//                         uvmdealloc(pagetable, a, oldsz);
-//                         return 0;
-//                 }
+                // mem = kalloc();
+                // if (mem == 0)
+                // {
+                //         uvmdealloc(pagetable, a, oldsz);
+                //         return 0;
+                // }
+                // memset(mem, 0, PGSIZE);
+                // if (mappages(pagetable, a, PGSIZE, (uint64)mem, PTE_R | PTE_U | xperm) != 0)
+                // {
+                //         kfree(mem);
+                //         uvmdealloc(pagetable, a, oldsz);
+                //         return 0;
+                // }
 //         }
 //         return newsz;
 // }
 
 // Demand Paging: Allocate PTEs, without allocating physical memory yet
+// Allocate PTEs and physical memory to grow process from oldsz to
+// newsz, which need not be page aligned.  Returns new size or 0 on error.
+// xperm is additional permissions
+// force_alloc is allocating the pages immediately instead of doing demand paging
 uint64
-uvmalloc(pagetable_t pagetable, uint64 oldsz, uint64 newsz, int xperm)
+uvmalloc(pagetable_t pagetable, uint64 oldsz, uint64 newsz, int xperm, int force_alloc)
 {
         uint64 a;
 
@@ -280,15 +285,34 @@ uvmalloc(pagetable_t pagetable, uint64 oldsz, uint64 newsz, int xperm)
         oldsz = PGROUNDUP(oldsz);
         for (a = oldsz; a < newsz; a += PGSIZE)
         {
-                pte_t *pte = walk(pagetable, a, 1);     // allocates for PTE space
-                if (pte == 0)
+                if (force_alloc)
                 {
-                        return 0;
+                        char* mem = kalloc();
+                        if (mem == 0)
+                        {
+                                uvmdealloc(pagetable, a, oldsz);
+                                return 0;
+                        }
+                        memset(mem, 0, PGSIZE);
+                        if (mappages(pagetable, a, PGSIZE, (uint64)mem, PTE_R | PTE_U | xperm) != 0)
+                        {
+                                kfree(mem);
+                                uvmdealloc(pagetable, a, oldsz);
+                                return 0;
+                        }
                 }
-
-                // Set xperm | PTE_D but clear PTE_V to trigger a trap
-                // 0 signifies we don't have a physical address yet
-                *pte = (0 | xperm | PTE_D | PTE_R | PTE_U) & ~PTE_V;
+                else
+                {
+                        pte_t *pte = walk(pagetable, a, 1);     // allocates for PTE space
+                        if (pte == 0)
+                        {
+                                return 0;
+                        }
+                        *pte = 0;
+                        // Set xperm | PTE_D but clear PTE_V to trigger a trap
+                        // 0 signifies we don't have a physical address yet
+                        *pte = (xperm | PTE_D | PTE_R | PTE_U) & ~PTE_V;
+                }
         }
         return newsz;
 }
@@ -357,22 +381,46 @@ int uvmcopy(pagetable_t old, pagetable_t new, uint64 sz)
         uint flags;
         char *mem;
 
+        printf("Process creation:\n");
         for (i = 0; i < sz; i += PGSIZE)
         {
-                if ((pte = walk(old, i, 0)) == 0)
+                if ((pte = walk(old, i, 0)) == 0){
                         panic("uvmcopy: pte should exist");
-                if ((*pte & PTE_V) == 0)
-                        panic("uvmcopy: page not present");
-                pa = PTE2PA(*pte);
-                flags = PTE_FLAGS(*pte);
-                if ((mem = kalloc()) == 0)
-                        goto err;
-                memmove(mem, (char *)pa, PGSIZE);
-                if (mappages(new, i, PGSIZE, (uint64)mem, flags) != 0)
-                {
-                        kfree(mem);
-                        goto err;
                 }
+                // PTE exists for both demand paging and not (Demand Paging will mean that some pages don't have physical memory allocations)
+                if ((*pte & PTE_V) != 0)        // Case: Valid (Physically allocated) Page
+                {
+                        // Parent does have allocated physical addresses, copy that to the child
+                        pa = PTE2PA(*pte);
+                        flags = PTE_FLAGS(*pte);
+                        if ((mem = kalloc()) == 0)
+                                goto err;
+                        memmove(mem, (char *)pa, PGSIZE);
+                        if (mappages(new, i, PGSIZE, (uint64)mem, flags) != 0)
+                        {
+                                kfree(mem);
+                                goto err;
+                        }
+                }
+                else if ((*pte & PTE_V) == 0 && (*pte & PTE_D) != 0)    // Case: Demand Paged
+                {
+                        // For Demand Paged pages, copy the PTE_FLAGS at the same indexes (it is a fork, so allocations should be similar)
+
+                        // allocate for a PTE in the new child table
+                        pte_t *child_pte = walk(new, i, 1);
+                        if (child_pte == 0)
+                        {
+                                goto err;
+                        }
+                        *child_pte = 0;
+                        uint64 parent_flags = PTE_FLAGS(*pte);
+                        *child_pte = 0xFFFFFFFFFFFFFFFFULL & parent_flags & ~PTE_V;
+                }
+                else    // Case: Non demand paged and non valid page
+                {
+                        panic("uvmcopy: page not present");
+                }
+                printf("Child pte %lx \n", *walk(new, i, 1));
         }
         return 0;
 
@@ -407,14 +455,24 @@ int copyout(pagetable_t pagetable, uint64 dstva, char *src, uint64 len)
                 if (va0 >= MAXVA)
                         return -1;
                 pte = walk(pagetable, va0, 0);
-                if (pte == 0 || (*pte & PTE_V) == 0 || (*pte & PTE_U) == 0 ||
-                    (*pte & PTE_W) == 0)
+                if (pte == 0 || (*pte & PTE_U) == 0 || (*pte & PTE_W) == 0 || ((*pte & PTE_D) == 0 && (*pte & PTE_V) == 0) || ((*pte & PTE_D) != 0 && (*pte & PTE_V) != 0))     // Demand Paging: Checks for cases where D and V are not valid
+                {        
                         return -1;
-                pa0 = PTE2PA(*pte);
+                }
+                
+                pa0 = PTE2PA(*pte);                             // the physical address
+                if (pa0 == 0)                                   // if pa0 is not allocated
+                {
+                        // allocate physical memory for it
+                        kalloc_and_map(pagetable, va0, pte);    // allocate physical memory for this
+                        pa0 = PTE2PA(*pte);                     // update the physical address
+                }
+
                 n = PGSIZE - (dstva - va0);
                 if (n > len)
                         n = len;
-                memmove((void *)(pa0 + (dstva - va0)), src, n);
+                
+                memmove((void *)(pa0 + (dstva - va0)), src, n); 
 
                 len -= n;
                 src += n;
@@ -426,6 +484,7 @@ int copyout(pagetable_t pagetable, uint64 dstva, char *src, uint64 len)
 // Copy from user to kernel.
 // Copy len bytes to dst from virtual address srcva in a given page table.
 // Return 0 on success, -1 on error.
+// TODO: Changes here
 int copyin(pagetable_t pagetable, char *dst, uint64 srcva, uint64 len)
 {
         uint64 n, va0, pa0;

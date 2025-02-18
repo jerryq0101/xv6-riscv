@@ -62,7 +62,7 @@ exec(char *path, char **argv)
     if(ph.vaddr % PGSIZE != 0)
       goto bad;
     uint64 sz1;
-    if((sz1 = uvmalloc(pagetable, sz, ph.vaddr + ph.memsz, flags2perm(ph.flags))) == 0)
+    if((sz1 = uvmalloc(pagetable, sz, ph.vaddr + ph.memsz, flags2perm(ph.flags), 1)) == 0)
       goto bad;
     sz = sz1;
     if(loadseg(pagetable, ph.vaddr, ip, ph.off, ph.filesz) < 0)
@@ -80,7 +80,7 @@ exec(char *path, char **argv)
   // Use the rest as the user stack.
   sz = PGROUNDUP(sz);
   uint64 sz1;
-  if((sz1 = uvmalloc(pagetable, sz, sz + (USERSTACK+1)*PGSIZE, PTE_W)) == 0)
+  if((sz1 = uvmalloc(pagetable, sz, sz + (USERSTACK+1)*PGSIZE, PTE_W, 0)) == 0)
     goto bad;
   sz = sz1;
   uvmclear(pagetable, sz-(USERSTACK+1)*PGSIZE);
@@ -140,34 +140,6 @@ exec(char *path, char **argv)
   return -1;
 }
 
-// // Load a program segment into pagetable at virtual address va.
-// // va must be page-aligned
-// // and the pages from va to va+sz must already be mapped.
-// // Returns 0 on success, -1 on failure.
-// static int
-// loadseg(pagetable_t pagetable, uint64 va, struct inode *ip, uint offset, uint sz)
-// {
-//   uint i, n;
-//   uint64 pa;
-
-//   for(i = 0; i < sz; i += PGSIZE){
-//     pa = walkaddr(pagetable, va + i);
-//     if(pa == 0)
-//       panic("loadseg: address should exist");
-//     if(sz - i < PGSIZE)
-//       n = sz - i;
-//     else
-//       n = PGSIZE;
-//     if(readi(ip, 0, (uint64)pa, offset+i, n) != n)
-//       return -1;
-//   }
-  
-//   return 0;
-// }
-
-// loadseg, Demand Paging version: 
-// Assumption: Before call, uvmalloc has mapped pages to empty physical addresses for demand paging
-// Here, we are dealing with program data, so we need to allocate physical memory immediately for executing the program
 // Load a program segment into pagetable at virtual address va.
 // va must be page-aligned
 // and the pages from va to va+sz must already be mapped.
@@ -175,51 +147,70 @@ exec(char *path, char **argv)
 static int
 loadseg(pagetable_t pagetable, uint64 va, struct inode *ip, uint offset, uint sz)
 {
-        uint i, n;
+  uint i, n;
+  uint64 pa;
 
-        // loop through each page, and then allocate for that page and store the data there
-        for(i = 0; i < sz; i += PGSIZE){
-        //     pa = walkaddr(pagetable, va + i);
-        //     if(pa == 0)
-        //       panic("loadseg: address should exist");
-        //     if(sz - i < PGSIZE)
-        //       n = sz - i;
-        //     else
-        //       n = PGSIZE;
-        //     if(readi(ip, 0, (uint64)pa, offset+i, n) != n)
-        //       return -1;
-                pte_t *pte = walk(pagetable, (uint64) (va + i), 0);
-                if (pte == 0)
-                {
-                        panic("loadseg: page table entry should exist (though pa should be not allocated yet)");
-                }
-                
-                char *mem = kalloc();   // physical address
-                if (mem == 0)           // physical mem alloc failed 
-                {
-                        return -1;
-                }
-                
-                if (sz - i < PGSIZE)            // if we are at the end
-                {
-                        n = sz - i;
-                }
-                else
-                {
-                        n = PGSIZE;
-                }
-
-                if (readi(ip, 0, (uint64) mem, offset+i, n) != n)
-                {
-                        // if read fails
-                        kfree(mem);
-                        return -1;
-                }
-
-                // Update PTE since this page is now allocated
-                int perm = PTE_FLAGS(*pte);           // set to non demand paging
-                perm = (perm & ~PTE_D) | PTE_V;                            // set to be valid
-                *pte = PA2PTE(mem) | perm;
-        }
-        return 0;
+  for(i = 0; i < sz; i += PGSIZE){
+    pa = walkaddr(pagetable, va + i);
+    if(pa == 0)
+      panic("loadseg: address should exist");
+    if(sz - i < PGSIZE)
+      n = sz - i;
+    else
+      n = PGSIZE;
+    if(readi(ip, 0, (uint64)pa, offset+i, n) != n)
+      return -1;
+  }
+  
+  return 0;
 }
+
+// // loadseg, Demand Paging version: 
+// // Assumption: Before call, uvmalloc has mapped pages to empty physical addresses for demand paging
+// // Here, we are dealing with program data, so we need to allocate physical memory immediately for executing the program
+// // Load a program segment into pagetable at virtual address va.
+// // va must be page-aligned
+// // and the pages from va to va+sz must already be mapped.
+// // Returns 0 on success, -1 on failure.
+// static int
+// loadseg(pagetable_t pagetable, uint64 va, struct inode *ip, uint offset, uint sz)
+// {
+//         uint i, n;
+
+//         // loop through each page, and then allocate for that page and store the data there
+//         for(i = 0; i < sz; i += PGSIZE){
+//                 pte_t *pte = walk(pagetable, va + i, 0);
+//                 if (pte == 0)
+//                 {
+//                         panic("loadseg: page table entry should exist (though pa should be not allocated yet)");
+//                 }
+                
+//                 char *mem = kalloc();   // physical address
+//                 if (mem == 0)           // physical mem alloc failed 
+//                 {
+//                         return -1;
+//                 }
+                
+//                 if (sz - i < PGSIZE)            // if we are at the end
+//                 {
+//                         n = sz - i;
+//                 }
+//                 else
+//                 {
+//                         n = PGSIZE;
+//                 }
+
+//                 if (readi(ip, 0, (uint64) mem, offset+i, n) != n)
+//                 {
+//                         // if read fails
+//                         kfree(mem);
+//                         return -1;
+//                 }
+
+//                 // Update PTE since this page is now allocated
+//                 int perm = PTE_FLAGS(*pte);           // set to non demand paging
+//                 perm = (perm & ~PTE_D) | PTE_V;                            // set to be valid
+//                 *pte = PA2PTE(mem) | perm;
+//         }
+//         return 0;
+// }

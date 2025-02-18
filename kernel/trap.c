@@ -67,42 +67,60 @@ usertrap(void)
 
     syscall();
   } 
-  else if (r_scause() == 13 || r_scause() == 15)        // Demand Paging Extension
-  {
-        // Reading an invalid page or writing an invalid page
-        uint64 va = PGROUNDDOWN(r_stval());
-        pte_t *pte = walk(p->pagetable, va, 0);
-
-        if (pte == 0)
-        {
-                printf("usertrap(): page not mapped pid=%d va=%p\n", p->pid, (void *) va);
-                acquire(&p->lock);
-                p->killed = 1;
-                release(&p->lock);
-        }
-        else if (pte != 0 && (*pte & PTE_D))         // Demand Paging Case
-        {
-                // do demand paging allocation
-                void *mem = kalloc_and_map(p->pagetable, va, pte);
-                if (mem == 0)
-                {
-                        acquire(&p->lock);
-                        p->killed = 1;
-                        release(&p->lock);
-                        return;
-                }
-        }
-        else
-        {
-                printf("usertrap(): invalid page read pid=%d va=%p\n", p->pid, (void *) va);
-                acquire(&p->lock);
-                p->killed = 1;
-                release(&p->lock);
-        }
-  }
   else if((which_dev = devintr()) != 0){
     // ok
-  } else {
+  }
+  else if (r_scause() >= 12 && r_scause() <= 15)        // Page fault cases
+  {
+        // Reading an invalid page or writing an invalid page
+        uint64 va = r_stval();
+        
+        // Verify this is a user address
+        if(va >= MAXVA || va < PGROUNDDOWN(p->trapframe->sp)) {
+            printf("usertrap(): invalid va access pid=%d va=%p\n", p->pid, (void*)va);
+            setkilled(p);
+            return;
+        }
+
+        // Page align the faulting address
+        va = PGROUNDDOWN(va);
+        
+        // Get the PTE if it exists
+        pte_t *pte = walk(p->pagetable, va, 0);
+        
+        if(pte == 0) {
+            // No PTE exists - this is an invalid access
+            printf("usertrap(): page not mapped pid=%d va=%p\n", p->pid, (void*)va);
+            setkilled(p);
+            return;
+        }
+
+        // Check if this is actually a demand paging case
+        if((*pte & PTE_U) && (*pte & PTE_D) && !(*pte & PTE_V)) {
+            // This is a valid demand paging case
+            // Ensure we're not in an interrupt context
+            if(intr_get()) {
+                printf("usertrap(): page fault in interrupt context\n");
+                setkilled(p);
+                return;
+            }
+            
+            // Allocate and map the page
+            void *mem = kalloc_and_map(p->pagetable, va, pte);
+            if(mem == 0) {
+                printf("usertrap(): kalloc failed pid=%d va=%p\n", p->pid, (void*)va);
+                setkilled(p);
+                return;
+            }
+        } else {
+            // Not a demand paging case - invalid access
+            printf("usertrap(): invalid page access pid=%d va=%p pte=%p\n", 
+                   p->pid, (void*)va, (void*)*pte);
+            setkilled(p);
+            return;
+        }
+  }
+  else {
     printf("usertrap(): unexpected scause 0x%lx pid=%d\n", r_scause(), p->pid);
     printf("            sepc=0x%lx stval=0x%lx\n", r_sepc(), r_stval());
     setkilled(p);
@@ -184,7 +202,6 @@ kerneltrap()
     printf("scause=0x%lx sepc=0x%lx stval=0x%lx\n", scause, r_sepc(), r_stval());
     panic("kerneltrap");
   }
-
   // give up the CPU if this is a timer interrupt.
   if(which_dev == 2 && myproc() != 0)
     yield();

@@ -78,7 +78,7 @@ kalloc(void)
   release(&kmem.lock);
 
   if(r)
-    memset((char*)r, 5, PGSIZE); // fill with junk
+    memset((char*)r, 6, PGSIZE); // fill with junk
   return (void*)r;
 }
 
@@ -91,7 +91,7 @@ kalloc_and_map(pagetable_t pagetable, uint64 va, pte_t *pte)
 
   acquire(&kmem.lock);
   
-  // Verify PTE is still demand-paged
+  // PTE is demand-paged
   if ((*pte & PTE_D) == 0) {
     release(&kmem.lock);
     return 0;
@@ -100,9 +100,9 @@ kalloc_and_map(pagetable_t pagetable, uint64 va, pte_t *pte)
   r = kmem.freelist;
   if(r) {
     kmem.freelist = r->next;
-    memset((char*)r, 0, PGSIZE);
+    memset((char*)r, 4, PGSIZE);
     
-    // Update PTE atomically
+    // Update PTE with newly got physical memory
     int perm = PTE_FLAGS(*pte);
     perm = (perm & ~PTE_D) | PTE_V;
     *pte = PA2PTE((uint64)r) | perm;
