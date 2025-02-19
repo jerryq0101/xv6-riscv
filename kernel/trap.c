@@ -57,7 +57,7 @@ void usertrap(void)
         if (va >= MAXVA)
         {
                 setkilled(p);
-                goto done;              // go to the end immediately, skip walking
+                goto done;              // go to the end immediately, skip walking for x >= MAXVA (as GROUNDDOWN(x) >= MAXVA)
         }
 
         if (r_scause() == 8)
