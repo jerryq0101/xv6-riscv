@@ -42,22 +42,22 @@ void usertrap(void)
 
         if ((r_sstatus() & SSTATUS_SPP) != 0)
                 panic("usertrap: not from user mode");
-
+        
+        struct proc *p = myproc();
+        
         // send interrupts and exceptions to kerneltrap(),
         // since we're now in the kernel.
         w_stvec((uint64)kernelvec);
-
-        struct proc *p = myproc();
-
+        
         // save user program counter.
         p->trapframe->epc = r_sepc();
-
-        // Verify this is a user address
+        
+        // Verify this is a user address and of adequate size
         uint64 va = r_stval();
-        if (va >= p->sz)
+        if (va >= MAXVA)
         {
                 setkilled(p);
-                return;
+                goto done;              // go to the end immediately, skip walking
         }
 
         if (r_scause() == 8)
@@ -91,6 +91,7 @@ void usertrap(void)
                 setkilled(p);
         }
 
+        done:
         if (killed(p))
                 exit(-1);
 
@@ -201,7 +202,7 @@ kerneltrap()
   uint64 sepc = r_sepc();
   uint64 sstatus = r_sstatus();
   uint64 scause = r_scause();
-  
+
   if((sstatus & SSTATUS_SPP) == 0)
     panic("kerneltrap: not from supervisor mode");
   if(intr_get() != 0)
@@ -209,7 +210,7 @@ kerneltrap()
 
   if((which_dev = devintr()) == 0){
     // interrupt or trap from an unknown source
-    printf("scause=0x%lx sepc=0x%lx stval=0x%lx\n", scause, r_sepc(), r_stval());
+    printf("scause=0x%lx sepc=0x%lx stval=0x%lx status=0x%lx\n", scause, r_sepc(), r_stval(), sstatus);
     panic("kerneltrap");
   }
   // give up the CPU if this is a timer interrupt.

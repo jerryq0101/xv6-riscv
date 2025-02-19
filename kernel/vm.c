@@ -452,8 +452,13 @@ int copyout(pagetable_t pagetable, uint64 dstva, char *src, uint64 len)
         while (len > 0)
         {
                 va0 = PGROUNDDOWN(dstva);
-                if (va0 >= MAXVA)
+                n = PGSIZE - (dstva - va0);
+                if (n > len)
+                        n = len;
+                if (dstva + n >= MAXVA)
                         return -1;
+                
+                // At this point va0 is not valid
                 pte = walkaddr_demand_paged(pagetable, va0);
                 if (pte == 0 || (*pte & PTE_U) == 0 || (*pte & PTE_W) == 0 || (*pte & PTE_D) != 0 || (*pte & PTE_V) == 0)     // Demand Paging: Checks for cases where D and V are not valid
                 {
@@ -461,10 +466,7 @@ int copyout(pagetable_t pagetable, uint64 dstva, char *src, uint64 len)
                 }
                 
                 pa0 = PTE2PA(*pte);                             // the physical address
-                n = PGSIZE - (dstva - va0);
-                if (n > len)
-                        n = len;
-                
+
                 memmove((void *)(pa0 + (dstva - va0)), src, n); 
 
                 len -= n;
@@ -485,6 +487,14 @@ int copyin(pagetable_t pagetable, char *dst, uint64 srcva, uint64 len)
         while (len > 0)
         {
                 va0 = PGROUNDDOWN(srcva);
+                n = PGSIZE - (srcva - va0);
+                if (n > len)
+                        n = len;
+                if (srcva + n >= MAXVA)
+                {
+                        return -1;
+                }
+                // Checks for validity of user srcva address
                 pte = walkaddr_demand_paged(pagetable, va0);
                 if (pte == 0 || (*pte & PTE_U) == 0 || (*pte & PTE_R) == 0)
                     return -1;
@@ -492,9 +502,7 @@ int copyin(pagetable_t pagetable, char *dst, uint64 srcva, uint64 len)
                 pa0 = PTE2PA(*pte);
                 if (pa0 == 0)
                         return -1;
-                n = PGSIZE - (srcva - va0);
-                if (n > len)
-                        n = len;
+
                 memmove(dst, (void *)(pa0 + (srcva - va0)), n);
 
                 len -= n;
@@ -517,6 +525,13 @@ int copyinstr(pagetable_t pagetable, char *dst, uint64 srcva, uint64 max)
         while (got_null == 0 && max > 0)
         {
                 va0 = PGROUNDDOWN(srcva);
+                n = PGSIZE - (srcva - va0);
+                if (n > max)
+                        n = max;
+                if (srcva + n >= MAXVA)
+                {
+                        return -1;
+                }
                 pte = walkaddr_demand_paged(pagetable, va0); // Use demand paging aware version
                 if (pte == 0 || (*pte & PTE_U) == 0 || (*pte & PTE_R) == 0)
                     return -1;
@@ -524,9 +539,7 @@ int copyinstr(pagetable_t pagetable, char *dst, uint64 srcva, uint64 max)
                 pa0 = PTE2PA(*pte);
                 if (pa0 == 0)
                         return -1;
-                n = PGSIZE - (srcva - va0);
-                if (n > max)
-                        n = max;
+                
 
                 char *p = (char *)(pa0 + (srcva - va0));
                 while (n > 0)
