@@ -455,8 +455,8 @@ int copyout(pagetable_t pagetable, uint64 dstva, char *src, uint64 len)
                 if (va0 >= MAXVA)
                         return -1;
                 pte = walkaddr_demand_paged(pagetable, va0);
-                if (pte == 0 || (*pte & PTE_U) == 0 || (*pte & PTE_W) == 0 || ((*pte & PTE_D) == 0 && (*pte & PTE_V) == 0) || ((*pte & PTE_D) != 0 && (*pte & PTE_V) != 0))     // Demand Paging: Checks for cases where D and V are not valid
-                {        
+                if (pte == 0 || (*pte & PTE_U) == 0 || (*pte & PTE_W) == 0 || (*pte & PTE_D) != 0 || (*pte & PTE_V) == 0)     // Demand Paging: Checks for cases where D and V are not valid
+                {
                         return -1;
                 }
                 
@@ -561,7 +561,7 @@ int copyinstr(pagetable_t pagetable, char *dst, uint64 srcva, uint64 max)
 
 
 // walkaddr_demand_paged
-// if finds a demand paged PTE, then allocates for it and returns the pte pointer
+// if finds a demand paged PTE, then allocates physical memory for it and returns the pte pointer
 // else, return the pte pointer
 pte_t *
 walkaddr_demand_paged(pagetable_t pagetable, uint64 va)
