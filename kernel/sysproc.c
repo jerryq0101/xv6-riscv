@@ -6,6 +6,7 @@
 #include "spinlock.h"
 #include "proc.h"
 #include "readcounterstate.h"
+#include "kalloc.h"
 #include "pstat.h"
 
 uint64
@@ -135,4 +136,27 @@ uint64
 sys_getreadcount(void)
 {
   return get_state();
+}
+
+uint64
+sys_getmemstat(void)
+{
+        uint64 stats;
+        struct memstat kstats;  // temp kernel space struct
+
+        // Get a user address pointer (supposedly)
+        // syscall puts us in kernel mode but the pointer itself is still a user space address
+        argaddr(0, &stats);
+
+        // Do safety checks and copy
+        acquire(&memory_statistics.lock);
+        kstats.total_allocations = memory_statistics.total_allocations;
+        kstats.total_allocated_pages = memory_statistics.total_allocated_pages;
+        release(&memory_statistics.lock);
+
+        if (copyout(myproc()->pagetable, stats, (char*) &kstats, sizeof(struct memstat)) < 0)
+        {
+                return -1;
+        }
+        return 0;
 }

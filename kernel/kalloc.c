@@ -11,6 +11,7 @@
 #include "kalloc.h"
 
 void freerange(void *pa_start, void *pa_end);
+struct mem_stats memory_statistics;
 
 extern char end[]; // first address after kernel.
                    // defined by kernel.ld.
@@ -27,8 +28,14 @@ struct {
 void
 kinit()
 {
-  initlock(&kmem.lock, "kmem");
-  freerange(end, (void*)PHYSTOP);
+        initlock(&kmem.lock, "kmem");
+        initlock(&memory_statistics.lock, "mem_stats");
+        // Calculate number of pages between end and PHYSTOP
+        uint64 num_pages = ((uint64)PHYSTOP - PGROUNDUP((uint64)end)) / PGSIZE;
+
+        memory_statistics.total_allocated_pages = num_pages;
+
+        freerange(end, (void*)PHYSTOP);
 }
 
 void
@@ -57,6 +64,10 @@ kfree(void *pa)
 
   r = (struct run*)pa;
 
+  acquire(&memory_statistics.lock);
+  memory_statistics.total_allocated_pages-=1;
+  release(&memory_statistics.lock);
+
   acquire(&kmem.lock);
   r->next = kmem.freelist;
   kmem.freelist = r;
@@ -69,17 +80,25 @@ kfree(void *pa)
 void *
 kalloc(void)
 {
-  struct run *r;
+        struct run *r;
 
-  acquire(&kmem.lock);
-  r = kmem.freelist;
-  if(r)
-    kmem.freelist = r->next;
-  release(&kmem.lock);
+        acquire(&kmem.lock);
+        r = kmem.freelist;
+        if (r)
+                kmem.freelist = r->next;
+        release(&kmem.lock);
 
-  if(r)
-    memset((char*)r, 6, PGSIZE); // fill with junk
-  return (void*)r;
+        if (r)
+        {
+                memset((char *)r, 6, PGSIZE); // fill with junk
+
+                // Update Memory Statistics
+                acquire(&memory_statistics.lock);
+                memory_statistics.total_allocated_pages+=1;
+                memory_statistics.total_allocations+=1;
+                release(&memory_statistics.lock);
+        }
+        return (void *)r;
 }
 
 // Demand Paging: Allocate physical memory for the demand paged PTE and change permissions accordingly
@@ -100,6 +119,12 @@ kalloc_and_map(pagetable_t pagetable, pte_t *pte)
   if(r) {
     kmem.freelist = r->next;
     memset((char*)r, 4, PGSIZE);
+
+    // Update Memory Statistics
+    acquire(&memory_statistics.lock);
+    memory_statistics.total_allocated_pages+=1;
+    memory_statistics.total_allocations+=1;
+    release(&memory_statistics.lock);
     
     // Update PTE with newly got physical memory
     int perm = PTE_FLAGS(*pte);
