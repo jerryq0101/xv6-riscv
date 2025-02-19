@@ -486,7 +486,7 @@ int copyin(pagetable_t pagetable, char *dst, uint64 srcva, uint64 len)
         {
                 va0 = PGROUNDDOWN(srcva);
                 pte = walkaddr_demand_paged(pagetable, va0);
-                if (pte == 0 || (*pte & PTE_U) == 0)
+                if (pte == 0 || (*pte & PTE_U) == 0 || (*pte & PTE_R) == 0)
                     return -1;
 
                 pa0 = PTE2PA(*pte);
@@ -518,7 +518,7 @@ int copyinstr(pagetable_t pagetable, char *dst, uint64 srcva, uint64 max)
         {
                 va0 = PGROUNDDOWN(srcva);
                 pte = walkaddr_demand_paged(pagetable, va0); // Use demand paging aware version
-                if (pte == 0 || (*pte & PTE_U) == 0)
+                if (pte == 0 || (*pte & PTE_U) == 0 || (*pte & PTE_R) == 0)
                     return -1;
                 
                 pa0 = PTE2PA(*pte);
