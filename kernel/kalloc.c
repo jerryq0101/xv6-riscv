@@ -36,7 +36,7 @@ kinit()
         memory_statistics.total_allocated_pages = num_pages;
 
         freerange(end, (void*)PHYSTOP);
-}
+} 
 
 void
 freerange(void *pa_start, void *pa_end)
