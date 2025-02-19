@@ -8,11 +8,14 @@
 #include "spinlock.h"
 #include "riscv.h"
 #include "defs.h"
+#include "kalloc.h"
 
 void freerange(void *pa_start, void *pa_end);
 
 extern char end[]; // first address after kernel.
                    // defined by kernel.ld.
+
+struct mem_stats memory_statistics;
 
 struct run {
   struct run *next;
@@ -26,8 +29,15 @@ struct {
 void
 kinit()
 {
-  initlock(&kmem.lock, "kmem");
-  freerange(end, (void*)PHYSTOP);
+        initlock(&kmem.lock, "kmem");
+        freerange(end, (void*)PHYSTOP);
+        initlock(&kmem.lock, "kmem");
+        initlock(&memory_statistics.lock, "mem_stats");
+        // Calculate number of pages between end and PHYSTOP
+        uint64 num_pages = ((uint64)PHYSTOP - PGROUNDUP((uint64)end)) / PGSIZE;
+        memory_statistics.total_allocated_pages = num_pages;
+
+        freerange(end, (void*)PHYSTOP);
 }
 
 void
@@ -54,6 +64,11 @@ kfree(void *pa)
   // Fill with junk to catch dangling refs.
   memset(pa, 1, PGSIZE);
 
+  // Decrease current allocated pages
+  acquire(&memory_statistics.lock);
+  memory_statistics.total_allocated_pages-=1;
+  release(&memory_statistics.lock);
+
   r = (struct run*)pa;
 
   acquire(&kmem.lock);
@@ -77,6 +92,14 @@ kalloc(void)
   release(&kmem.lock);
 
   if(r)
+  {
     memset((char*)r, 5, PGSIZE); // fill with junk
+
+    // Update Memory Statistics
+    acquire(&memory_statistics.lock);
+    memory_statistics.total_allocated_pages+=1;
+    memory_statistics.total_allocations+=1;
+    release(&memory_statistics.lock);
+}
   return (void*)r;
 }
