@@ -10,7 +10,7 @@ int main(int argc, char *argv[])
         // Get starting time in ticks
         int start_time = uptime();
         
-        // Lazy allocating user memory (In this implementation)
+        // Lazy allocating user memory (In this implementation) 
         int *arr = malloc(PGSIZE * 1000 * sizeof(int));
         struct memstat *s = malloc(sizeof(struct memstat));
         
