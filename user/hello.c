@@ -11,7 +11,7 @@ int main(int argc, char *argv[])
         int start_time = uptime();
         
         // Lazy allocating user memory (In this implementation)
-        int *arr = malloc(PGSIZE * 1000);
+        int *arr = malloc(PGSIZE * 1000 * sizeof(int));
         struct memstat *s = malloc(sizeof(struct memstat));
         
         for (int i = 0; i < PGSIZE * 1000; i+=PGSIZE)

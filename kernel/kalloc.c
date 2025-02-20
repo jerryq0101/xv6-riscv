@@ -9,12 +9,16 @@
 #include "riscv.h"
 #include "defs.h"
 #include "kalloc.h"
+#include "pa_track.h"
 
 void freerange(void *pa_start, void *pa_end);
-struct mem_stats memory_statistics;
 
 extern char end[]; // first address after kernel.
                    // defined by kernel.ld.
+
+struct mem_stats memory_statistics;
+uint64 cow_refcount[NPHYS];
+struct spinlock cow_ref_lock;
 
 struct run {
   struct run *next;
@@ -30,9 +34,9 @@ kinit()
 {
         initlock(&kmem.lock, "kmem");
         initlock(&memory_statistics.lock, "mem_stats");
+        initlock(&cow_ref_lock, "cow_refcount");
         // Calculate number of pages between end and PHYSTOP
         uint64 num_pages = ((uint64)PHYSTOP - PGROUNDUP((uint64)end)) / PGSIZE;
-
         memory_statistics.total_allocated_pages = num_pages;
 
         freerange(end, (void*)PHYSTOP);
@@ -54,24 +58,36 @@ freerange(void *pa_start, void *pa_end)
 void
 kfree(void *pa)
 {
-  struct run *r;
-
-  if(((uint64)pa % PGSIZE) != 0 || (char*)pa < end || (uint64)pa >= PHYSTOP)
-    panic("kfree");
-
-  // Fill with junk to catch dangling refs.
-  memset(pa, 1, PGSIZE);
-
-  r = (struct run*)pa;
-
-  acquire(&memory_statistics.lock);
-  memory_statistics.total_allocated_pages-=1;
-  release(&memory_statistics.lock);
-
-  acquire(&kmem.lock);
-  r->next = kmem.freelist;
-  kmem.freelist = r;
-  release(&kmem.lock);
+        struct run *r;
+        
+        if(((uint64)pa % PGSIZE) != 0 || (char*)pa < end || (uint64)pa >= PHYSTOP)
+                panic("kfree");
+        
+        acquire(&cow_ref_lock);
+        uint refs = cow_refcount[(uint64) pa / PGSIZE];
+        release(&cow_ref_lock);
+        if (refs <= 1)
+        {
+                // Fill with junk to catch dangling refs.
+                memset(pa, 1, PGSIZE);
+                
+                r = (struct run*)pa;
+                
+                // Update physical address tracking for COW
+                acquire(&cow_ref_lock);
+                cow_refcount[(uint64) pa / PGSIZE] = 0;
+                release(&cow_ref_lock);
+                
+                // Update memory statistics
+                acquire(&memory_statistics.lock);
+                memory_statistics.total_allocated_pages-=1;
+                release(&memory_statistics.lock);
+                
+                acquire(&kmem.lock);
+                r->next = kmem.freelist;
+                kmem.freelist = r;
+                release(&kmem.lock);
+        }
 }
 
 // Allocate one 4096-byte page of physical memory.
@@ -92,6 +108,11 @@ kalloc(void)
         {
                 memset((char *)r, 6, PGSIZE); // fill with junk
 
+                // Update physical address tracking for COW
+                acquire(&cow_ref_lock);
+                cow_refcount[(uint64) r / PGSIZE] = 1;
+                release(&cow_ref_lock);
+
                 // Update Memory Statistics
                 acquire(&memory_statistics.lock);
                 memory_statistics.total_allocated_pages+=1;
@@ -105,33 +126,40 @@ kalloc(void)
 void *
 kalloc_and_map(pagetable_t pagetable, pte_t *pte)
 {
-  struct run *r;
+        struct run *r;
 
-  acquire(&kmem.lock);
-  
-  // PTE is demand-paged
-  if ((*pte & PTE_D) == 0) {
-    release(&kmem.lock);
-    return 0;
-  }
+        acquire(&kmem.lock);
 
-  r = kmem.freelist;
-  if(r) {
-    kmem.freelist = r->next;
-    memset((char*)r, 4, PGSIZE);
+        // PTE is demand-paged
+        if ((*pte & PTE_D) == 0)
+        {
+                release(&kmem.lock);
+                return 0;
+        }
 
-    // Update Memory Statistics
-    acquire(&memory_statistics.lock);
-    memory_statistics.total_allocated_pages+=1;
-    memory_statistics.total_allocations+=1;
-    release(&memory_statistics.lock);
-    
-    // Update PTE with newly got physical memory
-    int perm = PTE_FLAGS(*pte);
-    perm = (perm & ~PTE_D) | PTE_V;
-    *pte = PA2PTE((uint64)r) | perm;
-  }
-  
-  release(&kmem.lock);
-  return (void*)r;
+        r = kmem.freelist;
+        if (r)
+        {
+                kmem.freelist = r->next;
+                memset((char *)r, 4, PGSIZE);
+
+                // Update physical address tracking for COW
+                acquire(&cow_ref_lock);
+                cow_refcount[(uint64)r / PGSIZE] = 1;
+                release(&cow_ref_lock);
+
+                // Update Memory Statistics
+                acquire(&memory_statistics.lock);
+                memory_statistics.total_allocated_pages += 1;
+                memory_statistics.total_allocations += 1;
+                release(&memory_statistics.lock);
+
+                // Update PTE with newly got physical memory
+                int perm = PTE_FLAGS(*pte);
+                perm = (perm & ~PTE_D) | PTE_V;
+                *pte = PA2PTE((uint64)r) | perm;
+        }
+
+        release(&kmem.lock);
+        return (void *)r;
 }

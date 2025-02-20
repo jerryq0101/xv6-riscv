@@ -6,6 +6,7 @@
 #include "proc.h"
 #include "defs.h"
 #include "kalloc.h"
+#include "pa_track.h"
 
 struct spinlock tickslock;
 uint ticks;
@@ -127,19 +128,36 @@ access_trap_handler(void)
         // Check if COW case
         if ((*pte & PTE_R) && (*pte & PTE_V) && !(*pte & PTE_W) && (*pte & PTE_C))
         {
-                // not sure why we check interrupt context
-                void *mem = kalloc();
-                if (mem == 0)
+                void *pa = (void *) PTE2PA(*pte);
+                acquire(&cow_ref_lock);
+                uint refs = cow_refcount[(uint64) pa / PGSIZE];
+                release(&cow_ref_lock);
+                if (refs > 1)
                 {
-                        printf("usertrap(): kalloc failed pid=%d va=%p\n", p->pid, (void*)va);
-                        setkilled(p);
-                        return;
+                        // not sure why we check interrupt context
+                        void *mem = kalloc();
+                        if (mem == 0)
+                        {
+                                printf("usertrap(): kalloc failed pid=%d va=%p\n", p->pid, (void*)va);
+                                setkilled(p);
+                                return;
+                        }
+                        
+                        void *prev = (void *) PTE2PA(*pte);
+                        memmove(mem, prev, PGSIZE);                     // Copy page content into new page
+                        *pte = PA2PTE(mem) | PTE_FLAGS(*pte);
+                        *pte = (*pte | PTE_W) & ~PTE_C;
+                        
+                        acquire(&cow_ref_lock);
+                        cow_refcount[(uint64) prev / PGSIZE] -= 1;
+                        release(&cow_ref_lock);
+                        // new address is updated in kalloc
+                }
+                else            // refs = 1
+                {
+                        *pte = (*pte | PTE_W) & ~PTE_C;
                 }
                 
-                void *prev = (void *) PTE2PA(*pte);
-                memmove(mem, prev, PGSIZE);                     // Copy page content into new page
-                *pte = PA2PTE(mem) | PTE_FLAGS(*pte);
-                *pte = (*pte | PTE_W) & ~PTE_C;
                 sfence_vma();
         }
         // Check if this is actually a demand paging case

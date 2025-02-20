@@ -7,6 +7,7 @@
 #include "fs.h"
 #include "spinlock.h"
 #include "kalloc.h"
+#include "pa_track.h"
 
 /*
  * the kernel's page table.
@@ -205,7 +206,13 @@ void uvmunmap(pagetable_t pagetable, uint64 va, uint64 npages, int do_free)
                 if (do_free && (*pte & PTE_V))
                 {
                         uint64 pa = PTE2PA(*pte);
+                        // acquire(&cow_ref_lock);
+                        // uint64 refs = cow_refcount[pa / PGSIZE];
+                        // release(&cow_ref_lock);
+                        // if (refs == 1)
+                        // {
                         kfree((void *)pa);
+                        // }
                 }
                 *pte = 0;
         }
@@ -418,6 +425,12 @@ int uvmcopy(pagetable_t old, pagetable_t new, uint64 sz)
                                 goto err;
                         }
                         *child_pte = *pte;
+                        
+                        // Update cow reference
+                        void *pa = (void *) PTE2PA(*pte);
+                        acquire(&cow_ref_lock);
+                        cow_refcount[(uint64) pa / PGSIZE] += 1;
+                        release(&cow_ref_lock);
 
                         sfence_vma();
                 }
@@ -441,7 +454,7 @@ int uvmcopy(pagetable_t old, pagetable_t new, uint64 sz)
         }
         return 0;
 
-err:
+err:                                            // On error: Frees all slots (and pages) already allocated for page table before i
         uvmunmap(new, 0, i / PGSIZE, 1);
         return -1;
 }
@@ -484,17 +497,34 @@ int copyout(pagetable_t pagetable, uint64 dstva, char *src, uint64 len)
                 // Check if this is a COW page
                 if ((*pte & PTE_V) && !(*pte & PTE_W) && (*pte & PTE_C))
                 {
-                        // Allocate a PA for destination address
-                        // then put it for this PTE
-                        void *mem = kalloc();
-                        if (mem == 0)
-                        {
-                                return -1;
-                        }
+
                         void *prev = (void *) PTE2PA(*pte);
-                        memmove(mem, prev, PGSIZE);                     // Copy page content into new page
-                        *pte = PTE_FLAGS(*pte) | PA2PTE(mem);
-                        *pte = (*pte | PTE_W) & ~PTE_C;
+                        acquire(&cow_ref_lock);
+                        uint refs = cow_refcount[(uint64) prev / PGSIZE];
+                        release(&cow_ref_lock);
+                        if (refs > 1)
+                        {
+                                // Allocate a PA for destination address
+                                // then put it for this PTE
+                                void *mem = kalloc();
+                                if (mem == 0)
+                                {
+                                        return -1;
+                                }
+                                memmove(mem, prev, PGSIZE);                     // Copy page content into new page
+                                *pte = PTE_FLAGS(*pte) | PA2PTE(mem);
+                                *pte = (*pte | PTE_W) & ~PTE_C;
+
+                                // Update COW refs previous page
+                                acquire(&cow_ref_lock);
+                                cow_refcount[(uint64) prev / PGSIZE] -= 1;
+                                // we update count of new pa in kalloc already
+                                release(&cow_ref_lock);
+                        }
+                        else    // refs = 1
+                        {
+                                *pte = (*pte | PTE_W) & ~PTE_C;
+                        }
                 }
                 // If not a COW page 
                 else
