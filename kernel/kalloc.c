@@ -70,19 +70,19 @@ kfree(void *pa)
         {
                 // Fill with junk to catch dangling refs.
                 memset(pa, 1, PGSIZE);
-                
+
                 r = (struct run*)pa;
-                
+
                 // Update physical address tracking for COW
                 acquire(&cow_ref_lock);
                 cow_refcount[(uint64) pa / PGSIZE] = 0;
                 release(&cow_ref_lock);
-                
+
                 // Update memory statistics
                 acquire(&memory_statistics.lock);
                 memory_statistics.total_allocated_pages-=1;
                 release(&memory_statistics.lock);
-                
+
                 acquire(&kmem.lock);
                 r->next = kmem.freelist;
                 kmem.freelist = r;

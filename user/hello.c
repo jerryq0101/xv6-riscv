@@ -20,8 +20,8 @@ int main(int argc, char *argv[])
                 print_memory_statistics(s, i, start_time);
         }
 
-        int m = fork();
-        if (m == 0)
+        int childProcessID = fork();
+        if (childProcessID == 0)
         {
                 malloc(PGSIZE * 8);
                 getmemstat(s);
@@ -29,10 +29,21 @@ int main(int argc, char *argv[])
                        uptime() - start_time, 
                        s->total_allocated_pages, 
                        s->total_allocations);
+                
+                // int a = 0;
+                while (1)
+                {
+                        getpid();
+                }
                 exit(0);
         }
-        int thing;
+        int thing = 0;
+        sleep(1);
+        kill(childProcessID);
         wait(&thing);
+
+        printf("Kill result: %d\n", thing);
+        
         getmemstat(s);
         printf("AFTER RUN at time %d: pages_curr_allocated: %ld, total_allocations: %ld\n", 
                uptime() - start_time,

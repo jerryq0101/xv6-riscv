@@ -61,6 +61,10 @@ void usertrap(void)
                 goto done;              // go to the end immediately, skip walking when x >= MAXVA (as GROUNDDOWN(x) >= MAXVA and breaks the operation)
         }
 
+        // Check if this process is killed
+        if (killed(p))
+                exit(-1);
+
         if (r_scause() == 8)
         {
                 // system call
@@ -83,7 +87,6 @@ void usertrap(void)
         }
         else if (r_scause() == 12 || r_scause() == 15 || r_scause() == 13) // Page fault cases
         {
-                
                 access_trap_handler();
         }
         else
@@ -108,6 +111,7 @@ void usertrap(void)
 void
 access_trap_handler(void)
 {
+
         // Reading an invalid page or writing an invalid page
         uint64 va = r_stval();
         struct proc *p = myproc();
@@ -126,15 +130,20 @@ access_trap_handler(void)
         }
 
         // Check if COW case
-        if ((*pte & PTE_R) && (*pte & PTE_V) && !(*pte & PTE_W) && (*pte & PTE_C))
+        else if ((*pte & PTE_R) && (*pte & PTE_V) && !(*pte & PTE_W) && (*pte & PTE_C))
         {
+                if(intr_get()) {
+                        printf("usertrap(): page fault in interrupt context\n");
+                        setkilled(p);
+                        return;
+                }
+
                 void *pa = (void *) PTE2PA(*pte);
                 acquire(&cow_ref_lock);
                 uint refs = cow_refcount[(uint64) pa / PGSIZE];
                 release(&cow_ref_lock);
                 if (refs > 1)
                 {
-                        // not sure why we check interrupt context
                         void *mem = kalloc();
                         if (mem == 0)
                         {
@@ -170,7 +179,7 @@ access_trap_handler(void)
                         setkilled(p);
                         return;
                 }
-                
+
                 // Allocate and map the page
                 void *mem = kalloc_and_map(p->pagetable, pte);
                 if(mem == 0) {

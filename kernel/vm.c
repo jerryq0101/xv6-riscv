@@ -205,13 +205,13 @@ void uvmunmap(pagetable_t pagetable, uint64 va, uint64 npages, int do_free)
                 }
                 if (do_free && (*pte & PTE_V))
                 {
-                        uint64 pa = PTE2PA(*pte);
+                        // uint64 pa = PTE2PA(*pte);
                         // acquire(&cow_ref_lock);
                         // uint64 refs = cow_refcount[pa / PGSIZE];
                         // release(&cow_ref_lock);
                         // if (refs == 1)
                         // {
-                        kfree((void *)pa);
+                                kfree((void *)pa);
                         // }
                 }
                 *pte = 0;

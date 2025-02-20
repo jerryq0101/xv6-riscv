@@ -816,8 +816,8 @@ killstatus(char *s)
     sleep(1);
     kill(pid1);
     wait(&xst);
-    if(xst != -1) {
-       printf("%s: status should be -1\n", s);
+    if(xst != -1) {     // TODO: FIX THIS, there some race condition here
+       printf("%s: status should be -1\n status=%d\n pid=%d\n", s, xst, pid1);
        exit(1);
     }
   }
