@@ -302,6 +302,8 @@ uvmalloc(pagetable_t pagetable, uint64 oldsz, uint64 newsz, int xperm, int force
                                 uvmdealloc(pagetable, a, oldsz);
                                 return 0;
                         }
+                        printf("uvmalloc: forcing alloc for va=0x%lx => mem=0x%lx perms=0x%x\n",
+                                a, (uint64)mem, xperm);
                 }
                 else
                 {
@@ -379,30 +381,45 @@ void uvmfree(pagetable_t pagetable, uint64 sz)
 int uvmcopy(pagetable_t old, pagetable_t new, uint64 sz)
 {
         pte_t *pte;
-        uint64 pa, i;
-        uint flags;
-        char *mem;
+        uint64 i;
 
-        // printf("Process creation:\n");
         for (i = 0; i < sz; i += PGSIZE)
         {
                 if ((pte = walk(old, i, 0)) == 0){
                         panic("uvmcopy: pte should exist");
                 }
-                // PTE exists for both demand paging and not (Demand Paging will mean that some pages don't have physical memory allocations)
                 if ((*pte & PTE_V) != 0)        // Case: Valid (Physically allocated) Page
                 {
-                        // Parent does have allocated physical addresses, copy that to the child
-                        pa = PTE2PA(*pte);
-                        flags = PTE_FLAGS(*pte);
-                        if ((mem = kalloc()) == 0)
-                                goto err;
-                        memmove(mem, (char *)pa, PGSIZE);
-                        if (mappages(new, i, PGSIZE, (uint64)mem, flags) != 0)
+                        // // Parent does have allocated physical addresses, copy that to the child
+                        // pa = PTE2PA(*pte);
+                        // flags = PTE_FLAGS(*pte);
+                        // if ((mem = kalloc()) == 0)
+                        //         goto err;
+                        // memmove(mem, (char *)pa, PGSIZE);
+                        // if (mappages(new, i, PGSIZE, (uint64)mem, flags) != 0)
+                        // {
+                        //         kfree(mem);
+                        //         goto err;
+                        // }
+
+                        // NEW LOGIC:
+                        // allocate a new page table entry for the child
+                        // copy over the flags
+                        // add the 9th reserved bit
+                        // copy over the pa as well
+                        // set both the parent PTE_W and child PTE_W to 0
+
+                        *pte = *pte | PTE_C;                            // set parent to be COW
+                        *pte = *pte & (~PTE_W);                         // Set parent write to be false
+
+                        pte_t *child_pte = walk(new, i, 1);
+                        if (child_pte == 0)
                         {
-                                kfree(mem);
                                 goto err;
                         }
+                        *child_pte = *pte;
+
+                        sfence_vma();
                 }
                 else if ((*pte & PTE_V) == 0 && (*pte & PTE_D) != 0)    // Case: Demand Paged
                 {
@@ -421,7 +438,6 @@ int uvmcopy(pagetable_t old, pagetable_t new, uint64 sz)
                 {
                         panic("uvmcopy: page not present");
                 }
-                // printf("Child pte %lx \n", *walk(new, i, 1));
         }
         return 0;
 
@@ -461,15 +477,32 @@ int copyout(pagetable_t pagetable, uint64 dstva, char *src, uint64 len)
                 
                 // At this point va0 is not valid
                 pte = walkaddr_demand_paged(pagetable, va0);
-                if (pte == 0 || (*pte & PTE_U) == 0 || (*pte & PTE_W) == 0 || (*pte & PTE_D) != 0 || (*pte & PTE_V) == 0)     // Demand Paging: Checks for cases where D and V are not valid
+                if (pte == 0 || (*pte & PTE_U) == 0 || ((*pte & PTE_W) == 0 && (*pte & PTE_C) == 0) || (*pte & PTE_D) != 0 || (*pte & PTE_V) == 0)     // Demand Paging: Checks for cases where D and V are not valid
                 {
                         return -1;
                 }
+                // Check if this is a COW page
+                if ((*pte & PTE_V) && !(*pte & PTE_W) && (*pte & PTE_C))
+                {
+                        // Allocate a PA for destination address
+                        // then put it for this PTE
+                        void *mem = kalloc();
+                        if (mem == 0)
+                        {
+                                return -1;
+                        }
+                        void *prev = (void *) PTE2PA(*pte);
+                        memmove(mem, prev, PGSIZE);                     // Copy page content into new page
+                        *pte = PTE_FLAGS(*pte) | PA2PTE(mem);
+                        *pte = (*pte | PTE_W) & ~PTE_C;
+                }
+                // If not a COW page 
+                else
+                {
+                        pa0 = PTE2PA(*pte);                             // the physical address
+                        memmove((void *)(pa0 + (dstva - va0)), src, n); 
+                }
                 
-                pa0 = PTE2PA(*pte);                             // the physical address
-
-                memmove((void *)(pa0 + (dstva - va0)), src, n); 
-
                 len -= n;
                 src += n;
                 dstva = va0 + PGSIZE;
@@ -540,7 +573,6 @@ int copyinstr(pagetable_t pagetable, char *dst, uint64 srcva, uint64 max)
                 pa0 = PTE2PA(*pte);
                 if (pa0 == 0)
                         return -1;
-                
 
                 char *p = (char *)(pa0 + (srcva - va0));
                 while (n > 0)

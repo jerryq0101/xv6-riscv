@@ -363,6 +363,7 @@ typedef uint64 *pagetable_t; // 512 PTEs
 #define PTE_X (1L << 3)
 #define PTE_U (1L << 4) // user can access
 #define PTE_D (1L << 8) // Demand paging signal
+#define PTE_C (1L << 9) // COW signal
 #define RESERVED_PHYS_ADDR (1L << 21)  // Demand Paging: Some high physical address that won't be used
 
 // shift a physical address to the right place for a PTE.

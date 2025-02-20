@@ -82,12 +82,14 @@ void usertrap(void)
         }
         else if (r_scause() == 12 || r_scause() == 15 || r_scause() == 13) // Page fault cases
         {
+                
                 access_trap_handler();
         }
         else
         {
+                pte_t *pte = walk(p->pagetable, va, 0);
                 printf("usertrap(): unexpected scause 0x%lx pid=%d\n", r_scause(), p->pid);
-                printf("            sepc=0x%lx stval=0x%lx\n", r_sepc(), r_stval());
+                printf("            sepc=0x%lx stval=0x%lx\n pte=%ld\n", r_sepc(), r_stval(), *pte);
                 setkilled(p);
         }
 
@@ -122,8 +124,27 @@ access_trap_handler(void)
                 return;
         }
 
+        // Check if COW case
+        if ((*pte & PTE_R) && (*pte & PTE_V) && !(*pte & PTE_W) && (*pte & PTE_C))
+        {
+                // not sure why we check interrupt context
+                void *mem = kalloc();
+                if (mem == 0)
+                {
+                        printf("usertrap(): kalloc failed pid=%d va=%p\n", p->pid, (void*)va);
+                        setkilled(p);
+                        return;
+                }
+                
+                void *prev = (void *) PTE2PA(*pte);
+                memmove(mem, prev, PGSIZE);                     // Copy page content into new page
+                *pte = PA2PTE(mem) | PTE_FLAGS(*pte);
+                *pte = (*pte | PTE_W) & ~PTE_C;
+                sfence_vma();
+        }
         // Check if this is actually a demand paging case
-        if((*pte & PTE_U) && (*pte & PTE_D) && !(*pte & PTE_V)) {
+        else if((*pte & PTE_U) && (*pte & PTE_D) && !(*pte & PTE_V))
+        {
                 // This is a valid demand paging case
                 // Ensure we're not in an interrupt context
                 if(intr_get()) {
@@ -139,9 +160,11 @@ access_trap_handler(void)
                         setkilled(p);
                         return;
                 }
-        } else {
+        } 
+        else
+        {
                 // Not a demand paging case - invalid access
-                printf("usertrap(): invalid page access pid=%d va=%p pte=%p\n", p->pid, (void*)va, (void*)*pte);
+                printf("usertrap(): invalid page access scause=%ld pid=%d va=%p pte=%p\n", r_scause(), p->pid, (void*)va, (void*)*pte);
                 setkilled(p);
                 return;
         }
