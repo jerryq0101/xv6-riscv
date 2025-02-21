@@ -64,9 +64,9 @@ kfree(void *pa)
                 panic("kfree");
         
         acquire(&cow_ref_lock);
-        uint refs = cow_refcount[(uint64) pa / PGSIZE];
+        uint64 refs = cow_refcount[(uint64) pa / PGSIZE];
         release(&cow_ref_lock);
-        if (refs <= 1)
+        if (refs <= 1)          // one reference left, free the physical address!
         {
                 // Fill with junk to catch dangling refs.
                 memset(pa, 1, PGSIZE);
@@ -87,6 +87,12 @@ kfree(void *pa)
                 r->next = kmem.freelist;
                 kmem.freelist = r;
                 release(&kmem.lock);
+        }
+        else if (refs > 1)   // Case: kfreeing a pa that still has other references, so decreasing the reference count for that page
+        {
+                acquire(&cow_ref_lock);
+                cow_refcount[(uint64) pa / PGSIZE] -= 1;
+                release(&cow_ref_lock);
         }
 }
 
@@ -158,6 +164,7 @@ kalloc_and_map(pagetable_t pagetable, pte_t *pte)
                 int perm = PTE_FLAGS(*pte);
                 perm = (perm & ~PTE_D) | PTE_V;
                 *pte = PA2PTE((uint64)r) | perm;
+                sfence_vma();
         }
 
         release(&kmem.lock);

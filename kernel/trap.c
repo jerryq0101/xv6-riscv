@@ -45,14 +45,11 @@ void usertrap(void)
                 panic("usertrap: not from user mode");
         
         struct proc *p = myproc();
-        
+
         // send interrupts and exceptions to kerneltrap(),
         // since we're now in the kernel.
         w_stvec((uint64)kernelvec);
-        
-        // save user program counter.
-        p->trapframe->epc = r_sepc();
-        
+
         // Verify this is a user address and of adequate size
         uint64 va = r_stval();
         if (va >= MAXVA)
@@ -60,11 +57,10 @@ void usertrap(void)
                 setkilled(p);
                 goto done;              // go to the end immediately, skip walking when x >= MAXVA (as GROUNDDOWN(x) >= MAXVA and breaks the operation)
         }
-
-        // Check if this process is killed
-        if (killed(p))
-                exit(-1);
-
+        
+        // save user program counter.
+        p->trapframe->epc = r_sepc();
+        
         if (r_scause() == 8)
         {
                 // system call
@@ -139,12 +135,14 @@ access_trap_handler(void)
                 }
 
                 void *pa = (void *) PTE2PA(*pte);
+
                 acquire(&cow_ref_lock);
-                uint refs = cow_refcount[(uint64) pa / PGSIZE];
+                uint64 refs = cow_refcount[(uint64) pa / PGSIZE];
                 release(&cow_ref_lock);
+
                 if (refs > 1)
                 {
-                        void *mem = kalloc();
+                        void *mem = kalloc();                           // Also sets cow_refcount[mem]= 1
                         if (mem == 0)
                         {
                                 printf("usertrap(): kalloc failed pid=%d va=%p\n", p->pid, (void*)va);
@@ -156,18 +154,16 @@ access_trap_handler(void)
                         memmove(mem, prev, PGSIZE);                     // Copy page content into new page
                         *pte = PA2PTE(mem) | PTE_FLAGS(*pte);
                         *pte = (*pte | PTE_W) & ~PTE_C;
-                        
+
                         acquire(&cow_ref_lock);
                         cow_refcount[(uint64) prev / PGSIZE] -= 1;
                         release(&cow_ref_lock);
-                        // new address is updated in kalloc
                 }
-                else            // refs = 1
+                else            // refs = 1 (no need to allocate for another phys address)
                 {
                         *pte = (*pte | PTE_W) & ~PTE_C;
                 }
                 
-                sfence_vma();
         }
         // Check if this is actually a demand paging case
         else if((*pte & PTE_U) && (*pte & PTE_D) && !(*pte & PTE_V))

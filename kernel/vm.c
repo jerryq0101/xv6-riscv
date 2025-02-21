@@ -205,13 +205,13 @@ void uvmunmap(pagetable_t pagetable, uint64 va, uint64 npages, int do_free)
                 }
                 if (do_free && (*pte & PTE_V))
                 {
-                        // uint64 pa = PTE2PA(*pte);
+                        uint64 pa = PTE2PA(*pte);
                         // acquire(&cow_ref_lock);
                         // uint64 refs = cow_refcount[pa / PGSIZE];
                         // release(&cow_ref_lock);
                         // if (refs == 1)
                         // {
-                                kfree((void *)pa);
+                        kfree((void *)pa);
                         // }
                 }
                 *pte = 0;
@@ -488,14 +488,25 @@ int copyout(pagetable_t pagetable, uint64 dstva, char *src, uint64 len)
                 if (dstva + n >= MAXVA)
                         return -1;
                 
+                printf("Address being copyout'ed to %p\n", (void *) va0);
+                
+                
                 // At this point va0 is not valid
                 pte = walkaddr_demand_paged(pagetable, va0);
-                if (pte == 0 || (*pte & PTE_U) == 0 || ((*pte & PTE_W) == 0 && (*pte & PTE_C) == 0) || (*pte & PTE_D) != 0 || (*pte & PTE_V) == 0)     // Demand Paging: Checks for cases where D and V are not valid
+                printf("PTE that is found %p\n", pte);
+
+                // Hypothesis:
+                // Assumption that this check is enough to distinguish the PTE as an invalid PTE
+                // The code below this depends on the PTE being valid -> either COW or not COW.
+                if (pte == 0 || (*pte & PTE_U) == 0 || (*pte & PTE_R) == 0 || ((*pte & PTE_W) == 0 && (*pte & PTE_C) == 0) || (*pte & PTE_D) != 0 || (*pte & PTE_V) == 0)     // Demand Paging: Checks for cases where D and V are not valid
                 {
                         return -1;
                 }
-                // Check if this is a COW page
-                if ((*pte & PTE_V) && !(*pte & PTE_W) && (*pte & PTE_C))
+
+                // This check should assume that the above checks filters out validity already
+                
+                // Below: Shoudl make sure that this is a COW page
+                if ((*pte & PTE_R) && (*pte & PTE_V) && !(*pte & PTE_W) && (*pte & PTE_C))
                 {
 
                         void *prev = (void *) PTE2PA(*pte);
@@ -520,17 +531,22 @@ int copyout(pagetable_t pagetable, uint64 dstva, char *src, uint64 len)
                                 cow_refcount[(uint64) prev / PGSIZE] -= 1;
                                 // we update count of new pa in kalloc already
                                 release(&cow_ref_lock);
+
+                                // do the copy operation
+                                memmove((char *) ((uint64) mem + (dstva - va0)), src, n);
                         }
-                        else    // refs = 1
+                        else    // refs = 1, so we just put stuff to the current page and make it unbecome a COW page
                         {
                                 *pte = (*pte | PTE_W) & ~PTE_C;
+                                goto copyout_to_phys;
                         }
                 }
                 // If not a COW page 
                 else
                 {
+                        copyout_to_phys:
                         pa0 = PTE2PA(*pte);                             // the physical address
-                        memmove((void *)(pa0 + (dstva - va0)), src, n); 
+                        memmove((char *)(pa0 + (dstva - va0)), src, n); 
                 }
                 
                 len -= n;

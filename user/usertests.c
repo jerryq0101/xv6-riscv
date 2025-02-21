@@ -37,18 +37,18 @@ copyin(char *s)
 
   for(int ai = 0; ai < sizeof(addrs)/sizeof(addrs[0]); ai++){
     uint64 addr = addrs[ai];
-    printf("Before open\n");
+//     printf("Before open\n");
     int fd = open("copyin1", O_CREATE|O_WRONLY);
-    printf("after open\n");
+//     printf("after open\n");
 
     if(fd < 0){
       printf("open(copyin1) failed\n");
       exit(1);
     }
 
-    printf("Before Write\n");
+//     printf("Before Write\n");
     int n = write(fd, (void*)addr, 8192);
-    printf("After Write\n");
+//     printf("After Write\n");
 
     if(n >= 0){
       printf("write(fd, %p, 8192) returned %d, not -1\n", (void*)addr, n);
@@ -95,6 +95,7 @@ copyout(char *s)
       exit(1);
     }
     int n = read(fd, (void*)addr, 8192);
+
     if(n > 0){
       printf("read(fd, %p, 8192) returned %d, not -1 or 0\n", (void*)addr, n);
       exit(1);
@@ -809,7 +810,7 @@ killstatus(char *s)
     }
     if(pid1 == 0){
       while(1) {
-        getpid();
+        printf("%d", getpid());
       }
       exit(0);
     }
