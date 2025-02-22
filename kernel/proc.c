@@ -6,6 +6,7 @@
 #include "proc.h"
 #include "defs.h"
 #include "pstat.h"
+#include "pa_track.h"
 
 struct cpu cpus[NCPU];
 
@@ -301,6 +302,27 @@ userinit(void)
   // LOTTERY: default ticket number is 1
   p->tickets = 1;
   p->ticks_ran = 0;
+
+  // Setup writability
+  for (uint64 va = 0; va < p->sz; va += PGSIZE) {
+        pte_t *pte = walk(p->pagetable, va, 0);
+        if (pte && (*pte & PTE_V)) {
+            uint64 pa = PTE2PA(*pte);
+
+            // Set global reference count (first allocation)
+            cow_refcount[pa / PGSIZE] = 1;
+
+            // If the page is writable, store it in cow_table[]
+            if (*pte & PTE_W) {
+                int index = cow_hash(va);
+                cow_writable_t *entry = kalloc();
+                entry->va = va;
+                entry->was_writable = 1;
+                entry->next = p->cow_table[index];
+                p->cow_table[index] = entry;
+            }
+        }
+    }
 
   release(&p->lock);
 }

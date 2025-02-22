@@ -1,3 +1,5 @@
+#include "pa_track.h"
+
 // Saved registers for kernel context switches.
 struct context
 {
@@ -107,6 +109,10 @@ struct proc
         // Lottery implementation
         int tickets;
         int ticks_ran;
+
+        // cow_table, tracking if a COW page was originally writable, should hold lock
+        // hashing a va -> an array of pointers -> searching for the va through a linkedlist
+        cow_writable_t *cow_table[COW_WRITABILITY_TABLE_SIZE];
 
         // wait_lock must be held when using this:
         struct proc *parent; // Parent process
