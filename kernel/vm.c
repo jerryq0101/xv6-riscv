@@ -397,41 +397,60 @@ int uvmcopy(pagetable_t old, pagetable_t new, uint64 sz)
                 }
                 if ((*pte & PTE_V) != 0)        // Case: Valid (Physically allocated) Page
                 {
-                        // // Parent does have allocated physical addresses, copy that to the child
-                        // pa = PTE2PA(*pte);
-                        // flags = PTE_FLAGS(*pte);
-                        // if ((mem = kalloc()) == 0)
-                        //         goto err;
-                        // memmove(mem, (char *)pa, PGSIZE);
-                        // if (mappages(new, i, PGSIZE, (uint64)mem, flags) != 0)
-                        // {
-                        //         kfree(mem);
-                        //         goto err;
-                        // }
+                        // NEW NEW NEW logic
+                        // if page is PTE_W = 1 (originally writable)
+                                // set the PTE_C = 1 and PTE_W = 0
+                        // if page is PTE_W = 0 (originally not even writable)
+                                // set PTE_C = 0 and PTE_W = 0
+                        // original logic
+                        
+                        // NEW NEW NEW NEW logic (for nested forks of preserving cow pages)
+                        // readonly (PTE_C=0 and PTE_W=0) 
+                                // same logic, do a reference to the same page, don't set cow bits
+                                // reference add
+                        // COW page that hasn’t been written to yet (PTE_C=1 and PTE_W=0)
+                                // keep the same bits in the child 
+                                // refernece add
+                        // Writable page (PTE_C=0 and PTE_W=1)
+                                // turn it into a COW page situation
+                                // potentially previous physical addresses may be using this
+                                // this just turned into a COW page, so should only be two references
 
-                        // NEW LOGIC:
-                        // allocate a new page table entry for the child
-                        // copy over the flags
-                        // add the 9th reserved bit
-                        // copy over the pa as well
-                        // set both the parent PTE_W and child PTE_W to 0
-
-                        *pte = *pte | PTE_C;                            // set parent to be COW
-                        *pte = *pte & (~PTE_W);                         // Set parent write to be false
+                        // note to self: free logic and other copy on write logic should be the same
 
                         pte_t *child_pte = walk(new, i, 1);
                         if (child_pte == 0)
                         {
                                 goto err;
                         }
-                        *child_pte = *pte;
+
+                        if (!(PTE_C & *pte) && !(PTE_W & *pte))         // readonly
+                        {
+                                *pte = *pte & (~PTE_C) & (~PTE_W);
+                                *child_pte = *pte;
+                        }
+                        else if ((PTE_C & *pte) && !(PTE_W & *pte))     // og cow page
+                        {
+                                *pte = (*pte | (PTE_C)) & (~PTE_W);
+                                *child_pte = *pte;
+                        }
+                        else if (!(PTE_C & *pte) && (PTE_W & *pte))     // writeable page
+                        {
+                                *pte = (*pte | (PTE_C)) & (~PTE_W);
+                                *child_pte = *pte;
+
+                                uint64 pa = PTE2PA(*pte);
+                                acquire(&cow_ref_lock);
+                                cow_refcount[pa / PGSIZE] = 1;
+                                release(&cow_ref_lock);
+                        }
+                        
                         
                         // Update cow reference
-                        void *pa = (void *) PTE2PA(*pte);
+                        uint64 pa = PTE2PA(*pte);                        
                         acquire(&cow_ref_lock);
-                        cow_refcount[(uint64) pa / PGSIZE] += 1;
+                        cow_refcount[pa / PGSIZE] += 1;
                         release(&cow_ref_lock);
-
                         sfence_vma();
                 }
                 else if ((*pte & PTE_V) == 0 && (*pte & PTE_D) != 0)    // Case: Demand Paged
@@ -488,12 +507,8 @@ int copyout(pagetable_t pagetable, uint64 dstva, char *src, uint64 len)
                 if (dstva + n >= MAXVA)
                         return -1;
                 
-                printf("Address being copyout'ed to %p\n", (void *) va0);
-                
-                
                 // At this point va0 is not valid
                 pte = walkaddr_demand_paged(pagetable, va0);
-                printf("PTE that is found %p\n", pte);
 
                 // Hypothesis:
                 // Assumption that this check is enough to distinguish the PTE as an invalid PTE
@@ -504,9 +519,7 @@ int copyout(pagetable_t pagetable, uint64 dstva, char *src, uint64 len)
                 }
 
                 // This check should assume that the above checks filters out validity already
-                
-                // Below: Shoudl make sure that this is a COW page
-                if ((*pte & PTE_R) && (*pte & PTE_V) && !(*pte & PTE_W) && (*pte & PTE_C))
+                if ((*pte & PTE_V) && !(*pte & PTE_W) && (*pte & PTE_C))
                 {
 
                         void *prev = (void *) PTE2PA(*pte);
@@ -534,10 +547,12 @@ int copyout(pagetable_t pagetable, uint64 dstva, char *src, uint64 len)
 
                                 // do the copy operation
                                 memmove((char *) ((uint64) mem + (dstva - va0)), src, n);
+                                sfence_vma();
                         }
                         else    // refs = 1, so we just put stuff to the current page and make it unbecome a COW page
                         {
                                 *pte = (*pte | PTE_W) & ~PTE_C;
+                                sfence_vma();
                                 goto copyout_to_phys;
                         }
                 }
@@ -608,14 +623,16 @@ int copyinstr(pagetable_t pagetable, char *dst, uint64 srcva, uint64 max)
                 n = PGSIZE - (srcva - va0);
                 if (n > max)
                         n = max;
-                if (srcva + n >= MAXVA)
+                
+                if (srcva + n >= MAXVA)         // Checking if reading over MAXVA
                 {
                         return -1;
                 }
+
                 pte = walkaddr_demand_paged(pagetable, va0); // Use demand paging aware version
                 if (pte == 0 || (*pte & PTE_U) == 0 || (*pte & PTE_R) == 0)
                     return -1;
-                
+
                 pa0 = PTE2PA(*pte);
                 if (pa0 == 0)
                         return -1;
@@ -641,6 +658,7 @@ int copyinstr(pagetable_t pagetable, char *dst, uint64 srcva, uint64 max)
 
                 srcva = va0 + PGSIZE;
         }
+
         if (got_null)
         {
                 return 0;

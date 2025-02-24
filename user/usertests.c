@@ -151,7 +151,7 @@ copyinstr2(char *s)
   for(int i = 0; i < MAXPATH; i++)
     b[i] = 'x';
   b[MAXPATH] = '\0';
-  
+
   int ret = unlink(b);
   if(ret != -1){
     printf("unlink(%s) returned %d, not -1\n", b, ret);
@@ -184,11 +184,16 @@ copyinstr2(char *s)
   }
   if(pid == 0){
     static char big[PGSIZE+1];
-    for(int i = 0; i < PGSIZE; i++)
+
+    for(int i = 0; i < PGSIZE; i++){
       big[i] = 'x';
+    }
+
     big[PGSIZE] = '\0';
+
     char *args2[] = { big, big, big, 0 };
     ret = exec("echo", args2);
+
     if(ret != -1){
       printf("exec(echo, BIG) returned %d, not -1\n", fd);
       exit(1);
@@ -199,7 +204,7 @@ copyinstr2(char *s)
   int st = 0;
   wait(&st);
   if(st != 747){
-    printf("exec(echo, BIG) succeeded, should have failed\n");
+    printf("exec(echo, BIG) succeeded, should have failed, the actual return code %d\n", st);
     exit(1);
   }
 }

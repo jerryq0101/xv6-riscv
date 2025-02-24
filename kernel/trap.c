@@ -126,7 +126,7 @@ access_trap_handler(void)
         }
 
         // Check if COW case
-        else if ((*pte & PTE_R) && (*pte & PTE_V) && !(*pte & PTE_W) && (*pte & PTE_C))
+        if ((*pte & PTE_V) && !(*pte & PTE_W) && (*pte & PTE_C))
         {
                 if(intr_get()) {
                         printf("usertrap(): page fault in interrupt context\n");

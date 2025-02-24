@@ -17,7 +17,7 @@ extern char end[]; // first address after kernel.
                    // defined by kernel.ld.
 
 struct mem_stats memory_statistics;
-uint64 cow_refcount[NPHYS];
+uint cow_refcount[NPHYS];
 struct spinlock cow_ref_lock;
 
 struct run {
