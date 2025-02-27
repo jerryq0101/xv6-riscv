@@ -57,6 +57,10 @@ void usertrap(void)
                 setkilled(p);
                 goto done;              // go to the end immediately, skip walking when x >= MAXVA (as GROUNDDOWN(x) >= MAXVA and breaks the operation)
         }
+
+        // check killed status
+        if (killed(p))
+                exit(-1);
         
         // save user program counter.
         p->trapframe->epc = r_sepc();
@@ -94,8 +98,10 @@ void usertrap(void)
         }
 
         done:
-        if (killed(p))
+        if (killed(p = myproc()))
+        {
                 exit(-1);
+        }
 
         // give up the CPU if this is a timer interrupt.
         if (which_dev == 2)
@@ -163,7 +169,8 @@ access_trap_handler(void)
                 {
                         *pte = (*pte | PTE_W) & ~PTE_C;
                 }
-                
+                sfence_vma();
+                return;
         }
         // Check if this is actually a demand paging case
         else if((*pte & PTE_U) && (*pte & PTE_D) && !(*pte & PTE_V))

@@ -444,14 +444,12 @@ int uvmcopy(pagetable_t old, pagetable_t new, uint64 sz)
                                 cow_refcount[pa / PGSIZE] = 1;
                                 release(&cow_ref_lock);
                         }
-                        
-                        
+                                                
                         // Update cow reference
                         uint64 pa = PTE2PA(*pte);                        
                         acquire(&cow_ref_lock);
                         cow_refcount[pa / PGSIZE] += 1;
                         release(&cow_ref_lock);
-                        sfence_vma();
                 }
                 else if ((*pte & PTE_V) == 0 && (*pte & PTE_D) != 0)    // Case: Demand Paged
                 {
@@ -470,6 +468,7 @@ int uvmcopy(pagetable_t old, pagetable_t new, uint64 sz)
                 {
                         panic("uvmcopy: page not present");
                 }
+                sfence_vma();
         }
         return 0;
 

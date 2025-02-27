@@ -9,29 +9,85 @@
 int main(int argc, char *argv[])
 {
 
-        ////////////////// COPYINSTR ISSUE RESOLUTION SECTION START /////////////////
-
-        int pid = fork();
-
-        if (pid == 0)
+        int a = fork();
+        if (a == 0)
         {
-                static char big[2];
-
-                big[0] = 'x';
-                big[1] = 'x';
-                
-                int i = 0;
-                while (1)
+                int arr[100000];
+                for (int i = 0; i < 100000; i++)
                 {
-                        i++;
+                        arr[i] = i;
                 }
-                exit(34);
         }
 
-        int exitcode = 0;
-        wait(&exitcode);
+        kill(a);
+        printf("Process og number %d\n", a);
+        int actual_thing = 0;
+        wait(&actual_thing);
+        printf("Waited process number%d\n", actual_thing);
 
-        printf("Exit Code: %d\n", exitcode);
+
+        //////// SBRKFAIL
+
+        // // test running fork with the above allocated page 
+        // int pid = fork();
+        // if(pid < 0){
+        //         printf("fork failed\n");
+        //         exit(1);
+        // }
+        // if (pid == 0)
+        // {
+        //         // allocate a lot of memory.
+        //         // this should produce a page fault,
+        //         // and thus not complete.
+        //         // a = sbrk(0);
+        //         #define BIG 4096 * 10
+        //         sbrk(10 * BIG);
+        //         int n = 0;
+        //         for (int i = 0; i < 10 * BIG; i += PGSIZE)
+        //         {
+        //                 n += *(a + i);
+        //         }
+        //         // print n so the compiler doesn't optimize away
+        //         // the for loop.
+        //         printf("%s: allocate a lot of memory succeeded %d\n", s, n);
+        //         exit(1);
+        // }
+
+        // // This print fixes everything - "gives enough time for the process to realize its been killed???"
+        // //  printf("did we get here? 1\n");
+
+        // wait(&xstatus);
+        // printf("The actual xstatus: %d\n", xstatus);
+        // if (xstatus != -1 && xstatus != 2)
+        // {
+        //         exit(1);
+        // }
+
+        ////////
+
+        ////////////////// COPYINSTR ISSUE RESOLUTION SECTION START /////////////////
+
+        // int pid = fork();
+
+        // if (pid == 0)
+        // {
+        //         static char big[2];
+
+        //         big[0] = 'x';
+        //         big[1] = 'x';
+                
+        //         int i = 0;
+        //         while (1)
+        //         {
+        //                 i++;
+        //         }
+        //         exit(34);
+        // }
+
+        // int exitcode = 0;
+        // wait(&exitcode);
+
+        // printf("Exit Code: %d\n", exitcode);
 
         ////////////////// COPYINSTR ISSUE RESOLUTION SECTION END /////////////////
 

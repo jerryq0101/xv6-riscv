@@ -2189,7 +2189,8 @@ sbrkfail(char *s)
   int i, xstatus;
   int fds[2];
   char scratch;
-  char *c, *a;
+  char *c;
+  char *a;
   int pids[10];
   int pid;
  
@@ -2209,18 +2210,29 @@ sbrkfail(char *s)
       read(fds[0], &scratch, 1);
   }
 
+
+  // Thing doesn't fail here due to demand paging, therefore won't be killed.
   // if those failed allocations freed up the pages they did allocate,
   // we'll be able to allocate here
   c = sbrk(PGSIZE);
-  for(i = 0; i < sizeof(pids)/sizeof(pids[0]); i++){
-    if(pids[i] == -1)
-      continue;
-    kill(pids[i]);
-    wait(0);
+  for (i = 0; i < sizeof(pids) / sizeof(pids[0]); i++)
+  {
+          if (pids[i] == -1)
+          {
+                printf("Not killed PID[%d]: %d\n", i, pids[i]);
+                continue;
+          }
+          kill(pids[i]);
+          printf("Killed Process: Pid-%d\n", pids[i]);
+          int thing_waited = 0;
+          wait(&thing_waited);
+          printf("Waited Process: Pid-%d\n", thing_waited);
+          printf("\n");
   }
-  if(c == (char*)0xffffffffffffffffL){
-    printf("%s: failed sbrk leaked memory\n", s);
-    exit(1);
+  if (c == (char *)0xffffffffffffffffL)
+  {
+          printf("%s: failed sbrk leaked memory\n", s);
+          exit(1);
   }
 
   // test running fork with the above allocated page 
@@ -2229,24 +2241,33 @@ sbrkfail(char *s)
     printf("%s: fork failed\n", s);
     exit(1);
   }
-  if(pid == 0){
-    // allocate a lot of memory.
-    // this should produce a page fault,
-    // and thus not complete.
-    a = sbrk(0);
-    sbrk(10*BIG);
-    int n = 0;
-    for (i = 0; i < 10*BIG; i += PGSIZE) {
-      n += *(a+i);
-    }
-    // print n so the compiler doesn't optimize away
-    // the for loop.
-    printf("%s: allocate a lot of memory succeeded %d\n", s, n);
-    exit(1);
+  if (pid == 0)
+  {
+          // allocate a lot of memory.
+          // this should produce a page fault,
+          // and thus not complete.
+          a = sbrk(0);
+          sbrk(10 * BIG);
+          int n = 0;
+          for (i = 0; i < 10 * BIG; i += PGSIZE)
+          {
+                  n += *(a + i);
+          }
+          // print n so the compiler doesn't optimize away
+          // the for loop.
+          printf("%s: allocate a lot of memory succeeded %d\n", s, n);
+          exit(1);
   }
+
+  // This wait fails for the demand paging case because of the child processes before didn't die yet
+  // so it waits for the child processes before and allows passage when any child process terminates.
   wait(&xstatus);
-  if(xstatus != -1 && xstatus != 2)
-    exit(1);
+
+  printf("The actual xstatus: %d\n", xstatus);
+  if (xstatus != -1 && xstatus != 2)
+  {
+          exit(1);
+  }
 }
 
   
