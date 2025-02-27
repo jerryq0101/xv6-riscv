@@ -43,6 +43,6 @@ void main()
                 plicinithart(); // ask PLIC for device interrupts
         }
 
-        // scheduler();
-        scheduler_lottery();
+        scheduler();
+        // scheduler_lottery();
 }
