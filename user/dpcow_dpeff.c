@@ -3,10 +3,17 @@
 #include "user/user.h"
 
 #define LARGE_SIZE (50 * 4096) // 50 pages (200KB)
-#define ACCESS_INTERVAL 10     // Only access every 10th page
 
-int main()
+int main(int argc, char* argv[])
 {
+        if (argc != 2)
+        {
+                printf("Usage: dpcow_dpeff X_pages_per_access\n");
+                exit(1);
+        }
+        // Assuming input is an integer > 0
+        int ACCESS_INTERVAL = atoi(argv[1]); // Only access every X page
+
         struct memstat before, after;
         getmemstat(&before);
 

@@ -4,7 +4,7 @@
 
 int main(int argc, char *argv[]) {
     struct memstat start_stats, end_stats;
-    
+
     if (argc > 1 && strcmp(argv[1], "child") == 0) {
         // This is the child process after exec
         getmemstat(&start_stats);
