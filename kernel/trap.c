@@ -91,9 +91,9 @@ void usertrap(void)
         }
         else
         {
-                pte_t *pte = walk(p->pagetable, va, 0);
-                printf("usertrap(): unexpected scause 0x%lx pid=%d\n", r_scause(), p->pid);
-                printf("            sepc=0x%lx stval=0x%lx\n pte=%ld\n", r_sepc(), r_stval(), *pte);
+                // pte_t *pte = walk(p->pagetable, va, 0);
+                // printf("usertrap(): unexpected scause 0x%lx pid=%d\n", r_scause(), p->pid);
+                // printf("            sepc=0x%lx stval=0x%lx\n pte=%ld\n", r_sepc(), r_stval(), *pte);
                 setkilled(p);
         }
 
@@ -126,10 +126,15 @@ access_trap_handler(void)
         
         if(pte == 0) {
                 // No PTE exists - this is an invalid access
-                printf("usertrap(): page not mapped pid=%d va=%p\n", p->pid, (void*)va);
+                // printf("usertrap(): page not mapped pid=%d va=%p\n", p->pid, (void*)va);
                 setkilled(p);
                 return;
         }
+
+        // Update statistics
+        acquire(&memory_statistics.lock);
+        memory_statistics.user_faults++;
+        release(&memory_statistics.lock);
 
         // Check if COW case
         if ((*pte & PTE_V) && !(*pte & PTE_W) && (*pte & PTE_C))
@@ -140,7 +145,7 @@ access_trap_handler(void)
                 release(&memory_statistics.lock);
 
                 if(intr_get()) {
-                        printf("usertrap(): page fault in interrupt context\n");
+                        // printf("usertrap(): page fault in interrupt context\n");
                         setkilled(p);
                         return;
                 }
@@ -156,7 +161,7 @@ access_trap_handler(void)
                         void *mem = kalloc();                           // Also sets cow_refcount[mem]= 1
                         if (mem == 0)
                         {
-                                printf("usertrap(): kalloc failed pid=%d va=%p\n", p->pid, (void*)va);
+                                // printf("usertrap(): kalloc failed pid=%d va=%p\n", p->pid, (void*)va);
                                 setkilled(p);
                                 return;
                         }
@@ -192,7 +197,7 @@ access_trap_handler(void)
 
                 // Ensure we're not in an interrupt context
                 if(intr_get()) {
-                        printf("usertrap(): page fault in interrupt context\n");
+                        // printf("usertrap(): page fault in interrupt context\n");
                         setkilled(p);
                         return;
                 }
@@ -200,7 +205,7 @@ access_trap_handler(void)
                 // Allocate and map the page
                 void *mem = kalloc_and_map(p->pagetable, pte);
                 if(mem == 0) {
-                        printf("usertrap(): kalloc failed pid=%d va=%p\n", p->pid, (void*)va);
+                        // printf("usertrap(): kalloc failed pid=%d va=%p\n", p->pid, (void*)va);
                         setkilled(p);
                         return;
                 }
@@ -208,7 +213,7 @@ access_trap_handler(void)
         else
         {
                 // Not a demand paging case - invalid access
-                printf("usertrap(): invalid page access scause=%ld pid=%d va=%p pte=%p\n", r_scause(), p->pid, (void*)va, (void*)*pte);
+                // printf("usertrap(): invalid page access scause=%ld pid=%d va=%p pte=%p\n", r_scause(), p->pid, (void*)va, (void*)*pte);
                 setkilled(p);
                 return;
         }

@@ -65,8 +65,8 @@ exec(char *path, char **argv)
     if((sz1 = uvmalloc(pagetable, sz, ph.vaddr + ph.memsz, flags2perm(ph.flags), 1)) == 0)
       goto bad;
     sz = sz1;
-    printf("exec: forced_alloc for code from offset=%ld vaddr=0x%lx size=%ld\n",
-        ph.off, ph.vaddr, ph.filesz);
+//     printf("exec: forced_alloc for code from offset=%ld vaddr=0x%lx size=%ld\n",
+//         ph.off, ph.vaddr, ph.filesz);
     if(loadseg(pagetable, ph.vaddr, ip, ph.off, ph.filesz) < 0)
       goto bad;
   }

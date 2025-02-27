@@ -309,8 +309,8 @@ uvmalloc(pagetable_t pagetable, uint64 oldsz, uint64 newsz, int xperm, int force
                                 uvmdealloc(pagetable, a, oldsz);
                                 return 0;
                         }
-                        printf("uvmalloc: forcing alloc for va=0x%lx => mem=0x%lx perms=0x%x\n",
-                                a, (uint64)mem, xperm);
+                        // printf("uvmalloc: forcing alloc for va=0x%lx => mem=0x%lx perms=0x%x\n",
+                        //         a, (uint64)mem, xperm);
                 }
                 else
                 {

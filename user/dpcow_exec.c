@@ -55,6 +55,11 @@ int main(int argc, char *argv[]) {
         printf("  Net change in allocated pages: %ld\n", 
                end_stats.total_allocated_pages - start_stats.total_allocated_pages);
         
+        uint64 actual_allocated = end_stats.total_allocations - start_stats.total_allocations;
+        uint64 user_faults = end_stats.user_faults - start_stats.user_faults;
+
+        printf("User faults: %ld | alloc_ops: %ld\n", user_faults, actual_allocated);
+       
         exit(0);
     }
 }

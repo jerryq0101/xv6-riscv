@@ -150,6 +150,7 @@ sys_getmemstat(void)
 
         // Do safety checks and copy
         acquire(&memory_statistics.lock);
+        kstats.user_faults = memory_statistics.user_faults;
         kstats.total_allocations = memory_statistics.total_allocations;
         kstats.total_allocated_pages = memory_statistics.total_allocated_pages;
         kstats.demand_page_faults = memory_statistics.demand_page_faults;
