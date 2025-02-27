@@ -58,7 +58,7 @@ void usertrap(void)
                 goto done;              // go to the end immediately, skip walking when x >= MAXVA (as GROUNDDOWN(x) >= MAXVA and breaks the operation)
         }
 
-        // check killed status
+        // check killed status to exit immediately
         if (killed(p))
                 exit(-1);
         
@@ -134,6 +134,11 @@ access_trap_handler(void)
         // Check if COW case
         if ((*pte & PTE_V) && !(*pte & PTE_W) && (*pte & PTE_C))
         {
+                // Update statistics
+                acquire(&memory_statistics.lock);
+                memory_statistics.cow_page_faults++;
+                release(&memory_statistics.lock);
+
                 if(intr_get()) {
                         printf("usertrap(): page fault in interrupt context\n");
                         setkilled(p);
@@ -161,6 +166,11 @@ access_trap_handler(void)
                         *pte = PA2PTE(mem) | PTE_FLAGS(*pte);
                         *pte = (*pte | PTE_W) & ~PTE_C;
 
+                        // Record cow copies made (User trap side)
+                        acquire(&memory_statistics.lock);
+                        memory_statistics.cow_copies_made++;
+                        release(&memory_statistics.lock);
+
                         acquire(&cow_ref_lock);
                         cow_refcount[(uint64) prev / PGSIZE] -= 1;
                         release(&cow_ref_lock);
@@ -175,7 +185,11 @@ access_trap_handler(void)
         // Check if this is actually a demand paging case
         else if((*pte & PTE_U) && (*pte & PTE_D) && !(*pte & PTE_V))
         {
-                // This is a valid demand paging case
+                // Update statistics
+                acquire(&memory_statistics.lock);
+                memory_statistics.demand_page_faults++;
+                release(&memory_statistics.lock);
+
                 // Ensure we're not in an interrupt context
                 if(intr_get()) {
                         printf("usertrap(): page fault in interrupt context\n");

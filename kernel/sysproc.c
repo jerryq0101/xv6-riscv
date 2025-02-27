@@ -152,6 +152,14 @@ sys_getmemstat(void)
         acquire(&memory_statistics.lock);
         kstats.total_allocations = memory_statistics.total_allocations;
         kstats.total_allocated_pages = memory_statistics.total_allocated_pages;
+        kstats.demand_page_faults = memory_statistics.demand_page_faults;
+        kstats.cow_page_faults = memory_statistics.cow_page_faults;
+        kstats.cow_pages_shared = memory_statistics.cow_pages_shared;
+        kstats.cow_copies_made = memory_statistics.cow_copies_made;
+        kstats.peak_allocated_pages = memory_statistics.peak_allocated_pages;
+        // OG Statistics
+        kstats.total_allocations = memory_statistics.total_allocations;
+        kstats.total_allocated_pages = memory_statistics.total_allocated_pages;
         release(&memory_statistics.lock);
 
         if (copyout(myproc()->pagetable, stats, (char*) &kstats, sizeof(struct memstat)) < 0)

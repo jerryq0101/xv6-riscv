@@ -12,7 +12,12 @@ typedef uint64 pde_t;
 #ifndef MEMSTAT
 #define MEMSTAT
 struct memstat {
-        uint64 total_allocated_pages;
-        uint64 total_allocations;
+        uint64 total_allocations;      // Total page allocations 
+        uint64 total_allocated_pages;  // Current allocated pages
+        uint64 demand_page_faults;     // Count of demand paging faults
+        uint64 cow_page_faults;        // Count of COW faults
+        uint64 cow_pages_shared;       // Pages initially shared through COW
+        uint64 cow_copies_made;        // Pages copied due to writes
+        uint64 peak_allocated_pages;   // Maximum memory usage observed
 };
 #endif

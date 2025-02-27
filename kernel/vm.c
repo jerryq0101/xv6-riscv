@@ -389,6 +389,8 @@ int uvmcopy(pagetable_t old, pagetable_t new, uint64 sz)
 {
         pte_t *pte;
         uint64 i;
+        // Statistics Tracking
+        uint64 cow_pages = 0;
 
         for (i = 0; i < sz; i += PGSIZE)
         {
@@ -444,6 +446,8 @@ int uvmcopy(pagetable_t old, pagetable_t new, uint64 sz)
                                 cow_refcount[pa / PGSIZE] = 1;
                                 release(&cow_ref_lock);
                         }
+
+                        cow_pages++;
                                                 
                         // Update cow reference
                         uint64 pa = PTE2PA(*pte);                        
@@ -470,6 +474,11 @@ int uvmcopy(pagetable_t old, pagetable_t new, uint64 sz)
                 }
                 sfence_vma();
         }
+
+        // Record the shared pages
+        acquire(&memory_statistics.lock);
+        memory_statistics.cow_pages_shared += cow_pages;
+        release(&memory_statistics.lock);
         return 0;
 
 err:                                            // On error: Frees all slots (and pages) already allocated for page table before i
@@ -496,6 +505,7 @@ int copyout(pagetable_t pagetable, uint64 dstva, char *src, uint64 len)
 {
         uint64 n, va0, pa0;
         pte_t *pte;
+        uint64 cow_copies = 0;
 
         while (len > 0)
         {
@@ -544,6 +554,9 @@ int copyout(pagetable_t pagetable, uint64 dstva, char *src, uint64 len)
                                 // we update count of new pa in kalloc already
                                 release(&cow_ref_lock);
 
+                                // Update cow copies for statistics
+                                cow_copies++;
+
                                 // do the copy operation
                                 memmove((char *) ((uint64) mem + (dstva - va0)), src, n);
                                 sfence_vma();
@@ -567,6 +580,11 @@ int copyout(pagetable_t pagetable, uint64 dstva, char *src, uint64 len)
                 src += n;
                 dstva = va0 + PGSIZE;
         }
+        // Record the COW copies (kernel side)
+        acquire(&memory_statistics.lock);
+        memory_statistics.cow_copies_made += cow_copies;
+        release(&memory_statistics.lock);
+
         return 0;
 }
 
@@ -686,6 +704,11 @@ walkaddr_demand_paged(pagetable_t pagetable, uint64 va)
         if ((*pte & PTE_V) == 0 && (*pte & PTE_D) != 0)         // Case: Invalid and Demand Paged
         {
                 kalloc_and_map(pagetable, pte);    // allocate physical memory for the pte
+
+                // Update statistics
+                acquire(&memory_statistics.lock);
+                memory_statistics.demand_page_faults++;
+                release(&memory_statistics.lock);
         }
         if ((*pte & PTE_V) == 0)
                 return 0;

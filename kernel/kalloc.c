@@ -119,10 +119,14 @@ kalloc(void)
                 cow_refcount[(uint64) r / PGSIZE] = 1;
                 release(&cow_ref_lock);
 
-                // Update Memory Statistics
+                // Track peak memory usage
                 acquire(&memory_statistics.lock);
-                memory_statistics.total_allocated_pages+=1;
-                memory_statistics.total_allocations+=1;
+                memory_statistics.total_allocated_pages++;
+                memory_statistics.total_allocations++;
+                
+                if (memory_statistics.total_allocated_pages > memory_statistics.peak_allocated_pages)
+                        memory_statistics.peak_allocated_pages = memory_statistics.total_allocated_pages;
+                
                 release(&memory_statistics.lock);
         }
         return (void *)r;
@@ -154,10 +158,14 @@ kalloc_and_map(pagetable_t pagetable, pte_t *pte)
                 cow_refcount[(uint64)r / PGSIZE] = 1;
                 release(&cow_ref_lock);
 
-                // Update Memory Statistics
+                // Track peak memory usage
                 acquire(&memory_statistics.lock);
-                memory_statistics.total_allocated_pages += 1;
-                memory_statistics.total_allocations += 1;
+                memory_statistics.total_allocated_pages++;
+                memory_statistics.total_allocations++;
+                
+                if (memory_statistics.total_allocated_pages > memory_statistics.peak_allocated_pages)
+                        memory_statistics.peak_allocated_pages = memory_statistics.total_allocated_pages;
+                
                 release(&memory_statistics.lock);
 
                 // Update PTE with newly got physical memory
