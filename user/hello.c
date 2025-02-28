@@ -45,7 +45,6 @@ int main(int argc, char *argv[])
         // dpcow_dpeff
         // run different percentage of page accesses and calculate page savings
         // Max 50 Pages
-        // Can't use files due to QEMU vm file system.
         for (int i = 1; i < 50; i++)           // Touching every page
         {
                 // Input: pages_per_access

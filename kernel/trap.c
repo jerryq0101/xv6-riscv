@@ -194,7 +194,7 @@ access_trap_handler(void)
         else
         {
                 // Not a demand paging case - invalid access
-                // printf("usertrap(): invalid page access scause=%ld pid=%d va=%p pte=%p\n", r_scause(), p->pid, (void*)va, (void*)*pte);
+                printf("usertrap(): invalid page access scause=%ld pid=%d va=%p pte=%p\n", r_scause(), p->pid, (void*)va, (void*)*pte);
                 setkilled(p);
                 return;
         }
