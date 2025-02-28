@@ -41,28 +41,28 @@ void itoa(int n, char *str)
 
 int main(int argc, char *argv[])
 {
-        // // The first part:
-        // // dpcow_dpeff
-        // // run different percentage of page accesses and calculate page savings
-        // // Max 50 Pages
-        // // Can't use files due to QEMU vm file system.
-        // for (int i = 1; i < 50; i++)           // Touching every page
-        // {
-        //         // Input: pages_per_access
-        //         int pages_per_access = i;
-        //         char buffer[20];
-        //         itoa(pages_per_access, buffer);
+        // The first part:
+        // dpcow_dpeff
+        // run different percentage of page accesses and calculate page savings
+        // Max 50 Pages
+        // Can't use files due to QEMU vm file system.
+        for (int i = 1; i < 50; i++)           // Touching every page
+        {
+                // Input: pages_per_access
+                int pages_per_access = i;
+                char buffer[20];
+                itoa(pages_per_access, buffer);
 
-        //         if (fork() == 0)
-        //         {
-        //                 printf("i: %d ", i);
-        //                 printf(" | ");
-        //                 char *args[] = {"dpcow_dpeff", buffer, "0", 0};
-        //                 exec("dpcow_dpeff", args);
-        //                 exit(1);
-        //         }
-        //         wait(0);
-        // }
+                if (fork() == 0)
+                {
+                        printf("i: %d ", i);
+                        printf(" | ");
+                        char *args[] = {"dpcow_dpeff", buffer, "0", 0};
+                        exec("dpcow_dpeff", args);
+                        exit(1);
+                }
+                wait(0);
+        }
 
         // printf("\n------COW Feature Testing-------\n");
         // printf("\n------COW heap written to vs pages saved-------\n");

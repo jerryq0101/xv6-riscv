@@ -57,10 +57,6 @@ void usertrap(void)
                 setkilled(p);
                 goto done;              // go to the end immediately, skip walking when x >= MAXVA (as GROUNDDOWN(x) >= MAXVA and breaks the operation)
         }
-
-        // check killed status to exit immediately
-        if (killed(p))
-                exit(-1);
         
         // save user program counter.
         p->trapframe->epc = r_sepc();
@@ -130,7 +126,7 @@ access_trap_handler(void)
         
         if(pte == 0) {
                 // No PTE exists - this is an invalid access
-                // printf("usertrap(): page not mapped pid=%d va=%p\n", p->pid, (void*)va);
+                printf("usertrap(): page not mapped pid=%d va=%p\n", p->pid, (void*)va);
                 setkilled(p);
                 return;
         }
@@ -144,40 +140,27 @@ access_trap_handler(void)
                 release(&memory_statistics.lock);
 
                 if(intr_get()) {
-                        // printf("usertrap(): page fault in interrupt context\n");
+                        printf("usertrap(): page fault in interrupt context\n");
                         setkilled(p);
                         return;
                 }
 
-                void *pa = (void *) PTE2PA(*pte);
-
-                acquire(&cow_ref_lock);
-                uint64 refs = cow_refcount[(uint64) pa / PGSIZE];
-                release(&cow_ref_lock);
-
+                void *prev = (void *) PTE2PA(*pte);
+                uint refs = get_refcount((uint64) prev);
                 if (refs > 1)
                 {
-                        void *mem = kalloc();                           // Also sets cow_refcount[mem]= 1
+                        void *mem = handle_cow_fault(pte, prev);
                         if (mem == 0)
                         {
-                                // printf("usertrap(): kalloc failed pid=%d va=%p\n", p->pid, (void*)va);
+                                printf("usertrap(): kalloc failed pid=%d va=%p\n", p->pid, (void*)va);
                                 setkilled(p);
                                 return;
                         }
-                        
-                        void *prev = (void *) PTE2PA(*pte);
-                        memmove(mem, prev, PGSIZE);                     // Copy page content into new page
-                        *pte = PA2PTE(mem) | PTE_FLAGS(*pte);
-                        *pte = (*pte | PTE_W) & ~PTE_C;
 
                         // Record cow copies made (User trap side)
                         acquire(&memory_statistics.lock);
                         memory_statistics.cow_copies_made++;
                         release(&memory_statistics.lock);
-
-                        acquire(&cow_ref_lock);
-                        cow_refcount[(uint64) prev / PGSIZE] -= 1;
-                        release(&cow_ref_lock);
                 }
                 else            // refs = 1 (no need to allocate for another phys address)
                 {
@@ -194,9 +177,8 @@ access_trap_handler(void)
                 memory_statistics.demand_page_faults++;
                 release(&memory_statistics.lock);
 
-                // Ensure we're not in an interrupt context
                 if(intr_get()) {
-                        // printf("usertrap(): page fault in interrupt context\n");
+                        printf("usertrap(): page fault in interrupt context\n");
                         setkilled(p);
                         return;
                 }
@@ -204,7 +186,7 @@ access_trap_handler(void)
                 // Allocate and map the page
                 void *mem = kalloc_and_map(p->pagetable, pte);
                 if(mem == 0) {
-                        // printf("usertrap(): kalloc failed pid=%d va=%p\n", p->pid, (void*)va);
+                        printf("usertrap(): kalloc failed pid=%d va=%p\n", p->pid, (void*)va);
                         setkilled(p);
                         return;
                 }

@@ -18,8 +18,8 @@ extern char etext[]; // kernel.ld sets this to end of kernel code.
 
 extern char trampoline[]; // trampoline.S
 
-pte_t *
-walkaddr_demand_paged(pagetable_t pagetable, uint64 va);
+pte_t* walkaddr_demand_paged(pagetable_t pagetable, uint64 va);
+void* handle_cow_fault(pte_t *pte, void *prev);
 
 // Make a direct-map page table for the kernel.
 pagetable_t
@@ -206,13 +206,7 @@ void uvmunmap(pagetable_t pagetable, uint64 va, uint64 npages, int do_free)
                 if (do_free && (*pte & PTE_V))
                 {
                         uint64 pa = PTE2PA(*pte);
-                        // acquire(&cow_ref_lock);
-                        // uint64 refs = cow_refcount[pa / PGSIZE];
-                        // release(&cow_ref_lock);
-                        // if (refs == 1)
-                        // {
                         kfree((void *)pa);
-                        // }
                 }
                 *pte = 0;
         }
@@ -246,36 +240,6 @@ void uvmfirst(pagetable_t pagetable, uchar *src, uint sz)
         memmove(mem, src, sz);
 }
 
-// // Allocate PTEs and physical memory to grow process from oldsz to
-// // newsz, which need not be page aligned.  Returns new size or 0 on error.
-// uint64
-// uvmalloc(pagetable_t pagetable, uint64 oldsz, uint64 newsz, int xperm)
-// {
-//         char *mem;
-//         uint64 a;
-
-//         if (newsz < oldsz)
-//                 return oldsz;
-
-//         oldsz = PGROUNDUP(oldsz);
-//         for (a = oldsz; a < newsz; a += PGSIZE)
-//         {
-                // mem = kalloc();
-                // if (mem == 0)
-                // {
-                //         uvmdealloc(pagetable, a, oldsz);
-                //         return 0;
-                // }
-                // memset(mem, 0, PGSIZE);
-                // if (mappages(pagetable, a, PGSIZE, (uint64)mem, PTE_R | PTE_U | xperm) != 0)
-                // {
-                //         kfree(mem);
-                //         uvmdealloc(pagetable, a, oldsz);
-                //         return 0;
-                // }
-//         }
-//         return newsz;
-// }
 
 // Demand Paging: Allocate PTEs, without allocating physical memory yet
 // Allocate PTEs and physical memory to grow process from oldsz to
@@ -309,8 +273,6 @@ uvmalloc(pagetable_t pagetable, uint64 oldsz, uint64 newsz, int xperm, int force
                                 uvmdealloc(pagetable, a, oldsz);
                                 return 0;
                         }
-                        // printf("uvmalloc: forcing alloc for va=0x%lx => mem=0x%lx perms=0x%x\n",
-                        //         a, (uint64)mem, xperm);
                 }
                 else
                 {
@@ -419,7 +381,6 @@ int uvmcopy(pagetable_t old, pagetable_t new, uint64 sz)
                                 // this just turned into a COW page, so should only be two references
 
                         // note to self: free logic and other copy on write logic should be the same
-
                         pte_t *child_pte = walk(new, i, 1);
                         if (child_pte == 0)
                         {
@@ -442,18 +403,14 @@ int uvmcopy(pagetable_t old, pagetable_t new, uint64 sz)
                                 *child_pte = *pte;
 
                                 uint64 pa = PTE2PA(*pte);
-                                acquire(&cow_ref_lock);
-                                cow_refcount[pa / PGSIZE] = 1;
-                                release(&cow_ref_lock);
+                                set_refcount(pa, 1);
                         }
 
                         cow_pages++;
                                                 
                         // Update cow reference
-                        uint64 pa = PTE2PA(*pte);                        
-                        acquire(&cow_ref_lock);
-                        cow_refcount[pa / PGSIZE] += 1;
-                        release(&cow_ref_lock);
+                        uint64 pa = PTE2PA(*pte);
+                        incr_refcount(pa);
                 }
                 else if ((*pte & PTE_V) == 0 && (*pte & PTE_D) != 0)    // Case: Demand Paged
                 {
@@ -519,7 +476,7 @@ int copyout(pagetable_t pagetable, uint64 dstva, char *src, uint64 len)
                 // At this point va0 is not valid
                 pte = walkaddr_demand_paged(pagetable, va0);
 
-                // Hypothesis:
+                // WRONG hypothesis:
                 // Assumption that this check is enough to distinguish the PTE as an invalid PTE
                 // The code below this depends on the PTE being valid -> either COW or not COW.
                 if (pte == 0 || (*pte & PTE_U) == 0 || (*pte & PTE_R) == 0 || ((*pte & PTE_W) == 0 && (*pte & PTE_C) == 0) || (*pte & PTE_D) != 0 || (*pte & PTE_V) == 0)     // Demand Paging: Checks for cases where D and V are not valid
@@ -532,28 +489,14 @@ int copyout(pagetable_t pagetable, uint64 dstva, char *src, uint64 len)
                 {
 
                         void *prev = (void *) PTE2PA(*pte);
-                        acquire(&cow_ref_lock);
-                        uint refs = cow_refcount[(uint64) prev / PGSIZE];
-                        release(&cow_ref_lock);
+                        uint refs = get_refcount((uint64) prev);
                         if (refs > 1)
                         {
-                                // Allocate a PA for destination address
-                                // then put it for this PTE
-                                void *mem = kalloc();
+                                void *mem = handle_cow_fault(pte, prev);
                                 if (mem == 0)
                                 {
                                         return -1;
                                 }
-                                memmove(mem, prev, PGSIZE);                     // Copy page content into new page
-                                *pte = PTE_FLAGS(*pte) | PA2PTE(mem);
-                                *pte = (*pte | PTE_W) & ~PTE_C;
-
-                                // Update COW refs previous page
-                                acquire(&cow_ref_lock);
-                                cow_refcount[(uint64) prev / PGSIZE] -= 1;
-                                // we update count of new pa in kalloc already
-                                release(&cow_ref_lock);
-
                                 // Update cow copies for statistics
                                 cow_copies++;
 
@@ -716,4 +659,26 @@ walkaddr_demand_paged(pagetable_t pagetable, uint64 va)
                 return 0;
         
         return pte;
+}
+
+
+// Handles Common Copy on Write logic (Allocate, copy, change bits, and decrement)
+void *
+handle_cow_fault(pte_t *pte, void *prev)
+{
+        // Allocate a PA for destination address
+        // then put it for this PTE
+        void *mem = kalloc();
+        if (mem == 0)
+        {
+                return 0;
+        }
+        memmove(mem, prev, PGSIZE);                     // Copy page content into new page
+        *pte = PTE_FLAGS(*pte) | PA2PTE(mem);
+        *pte = (*pte | PTE_W) & ~PTE_C;
+
+        // Update COW refs previous page
+        decr_refcount((uint64) prev);
+
+        return mem;
 }

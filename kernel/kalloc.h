@@ -16,3 +16,4 @@ struct mem_stats {
 extern struct mem_stats memory_statistics;
 
 void* kalloc_and_map(pagetable_t pagetable, pte_t *pte);
+void* handle_cow_fault(pte_t *pte, void *prev);

@@ -10,4 +10,9 @@
 extern uint cow_refcount[NPHYS];                                // COW count of physical page (where i = Address / PGSIZE)
 extern struct spinlock cow_ref_lock;                            // Locking to protect updates
 
+void incr_refcount(uint64 pa);
+void decr_refcount(uint64 pa);
+void set_refcount(uint64 pa, uint num);
+uint get_refcount(uint64 pa);
+
 #endif /* PA_TRACK_H */
