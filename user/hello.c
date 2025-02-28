@@ -94,50 +94,52 @@ int main(int argc, char *argv[])
 
         // The second part: Comparison of extra faults
 
-        // DP and COW: 
-        // Tracking extra faults and allocations for sample load
-        for (int i = 1; i < 50; i++)           // Touching every page
-        {
-                // Input: pages_per_access
-                int pages_per_access = i;
-                char buffer[20];
-                itoa(pages_per_access, buffer);
+        // // DP and COW: 
+        // // Tracking extra faults and allocations for sample load
+        // for (int i = 1; i < 50; i++)           // Touching every page
+        // {
+        //         // Input: pages_per_access
+        //         int pages_per_access = i;
+        //         char buffer[20];
+        //         itoa(pages_per_access, buffer);
 
-                if (fork() == 0)
-                {
-                        printf("i: %d ", i);
-                        printf(" | ");
-                        char *args[] = {"dpcow_dpeff", buffer, "1", 0};
-                        exec("dpcow_dpeff", args);
-                        exit(1);
-                }
-                wait(0);
-        }
+        //         if (fork() == 0)
+        //         {
+        //                 printf("i: %d ", i);
+        //                 printf(" | ");
+        //                 char *args[] = {"dpcow_dpeff", buffer, "1", 0};
+        //                 exec("dpcow_dpeff", args);
+        //                 exit(1);
+        //         }
+        //         wait(0);
+        // }
         
-        printf("\n ------COW extra faults----- \n");
+        // printf("\n ------COW extra faults----- \n");
 
-        // COW extra faults
-        #define CONST_CHILDREN "10"
-        // 1 to 100 write percentage
-        for (int i = 1; i < 100; i++)           // Touching every page
-        {
-                // Input: write percentage
-                int write_perc = i;
-                char buffer[20];
-                itoa(write_perc, buffer);
+        // // COW extra faults
+        // #define CONST_CHILDREN "10"
+        // // 1 to 100 write percentage
+        // for (int i = 1; i < 100; i++)           // Touching every page
+        // {
+        //         // Input: write percentage
+        //         int write_perc = i;
+        //         char buffer[20];
+        //         itoa(write_perc, buffer);
 
-                if (fork() == 0)
-                {
-                        printf("i: %d ", i);
-                        printf(" | ");
-                        char *args[] = {"dpcow_encow", CONST_CHILDREN, buffer, "1", 0};
-                        exec("dpcow_encow", args);
-                        exit(1);
-                }
-                wait(0);
-        }
-        
-        
+        //         if (fork() == 0)
+        //         {
+        //                 printf("i: %d ", i);
+        //                 printf(" | ");
+        //                 char *args[] = {"dpcow_encow", CONST_CHILDREN, buffer, "1", 0};
+        //                 exec("dpcow_encow", args);
+        //                 exit(1);
+        //         }
+        //         wait(0);
+        // }
+
+
+
+        /// MORE SHIT BELOW WHEN I WAS SOLVING PROBLEMS ///
 
         // int a = fork();
         // if (a == 0)

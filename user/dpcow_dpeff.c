@@ -45,12 +45,12 @@ int main(int argc, char* argv[])
         getmemstat(&after);
 
         uint64 actual_allocated = after.total_allocations - before.total_allocations;
-        if (faults)
+        if (faults == 1)
         {
                 uint64 user_faults = after.user_faults - before.user_faults;
                 printf("User faults: %ld | alloc_ops: %ld\n", user_faults, actual_allocated);
         }
-        else
+        else if (faults == 0)
         {
                 // Calculate metrics
                 uint64 total_virtual_pages = LARGE_SIZE / 4096;
@@ -59,6 +59,10 @@ int main(int argc, char* argv[])
                 printf("Memory saved: %ld pages (%ld KB)\n",
                         total_virtual_pages - actual_allocated,
                         (total_virtual_pages - actual_allocated) * 4);
+        }
+        else
+        {
+                
         }
 
         free(buf);

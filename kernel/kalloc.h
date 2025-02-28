@@ -4,8 +4,7 @@ struct mem_stats {
         uint64 total_allocations;                 // Tracks how many kalloc operations has been made
 
         // New metrics for benchmarking
-        uint64 user_faults;                // Count of total usertraps
-        
+        uint64 user_faults;                // Count of total page faults
         uint64 demand_page_faults;         // Count of demand paging faults
         uint64 cow_page_faults;            // Count of COW faults
         uint64 cow_pages_shared;           // Pages initially shared through COW

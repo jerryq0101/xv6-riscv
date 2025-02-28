@@ -87,13 +87,17 @@ void usertrap(void)
         }
         else if (r_scause() == 12 || r_scause() == 15 || r_scause() == 13) // Page fault cases
         {
+                // Update statistics
+                acquire(&memory_statistics.lock);
+                memory_statistics.user_faults++;
+                release(&memory_statistics.lock);
                 access_trap_handler();
         }
         else
         {
-                // pte_t *pte = walk(p->pagetable, va, 0);
-                // printf("usertrap(): unexpected scause 0x%lx pid=%d\n", r_scause(), p->pid);
-                // printf("            sepc=0x%lx stval=0x%lx\n pte=%ld\n", r_sepc(), r_stval(), *pte);
+                pte_t *pte = walk(p->pagetable, va, 0);
+                printf("usertrap(): unexpected scause 0x%lx pid=%d\n", r_scause(), p->pid);
+                printf("            sepc=0x%lx stval=0x%lx\n pte=%ld\n", r_sepc(), r_stval(), *pte);
                 setkilled(p);
         }
 
@@ -130,11 +134,6 @@ access_trap_handler(void)
                 setkilled(p);
                 return;
         }
-
-        // Update statistics
-        acquire(&memory_statistics.lock);
-        memory_statistics.user_faults++;
-        release(&memory_statistics.lock);
 
         // Check if COW case
         if ((*pte & PTE_V) && !(*pte & PTE_W) && (*pte & PTE_C))
