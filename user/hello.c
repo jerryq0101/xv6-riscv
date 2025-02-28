@@ -1,29 +1,184 @@
 #include "kernel/types.h"
 #include "user/user.h"
-#pragma GCC diagnostic ignored "-Wunused-but-set-variable"
+// #include "stdio.h"
+#pragma GCC diagnostic ignored "-Wunused-variable"
 
 #define PGSIZE 4096
 
 // void print_memory_statistics(struct memstat *s, int i, int start_time);
 
+// Convert int to string (char array)
+void itoa(int n, char *str)
+{
+        int i = 0, sign;
+
+        // Handle negative numbers
+        if ((sign = n) < 0)
+                n = -n;
+
+        // Generate digits in reverse order
+        do
+        {
+                str[i++] = n % 10 + '0'; // Convert digit to ASCII
+        } while ((n /= 10) > 0);
+
+        // Add negative sign if needed
+        if (sign < 0)
+                str[i++] = '-';
+
+        str[i] = '\0'; // Null-terminate the string
+
+        // Reverse the string
+        int j, k;
+        char c;
+        for (j = 0, k = i - 1; j < k; j++, k--)
+        {
+                c = str[j];
+                str[j] = str[k];
+                str[k] = c;
+        }
+}
+
 int main(int argc, char *argv[])
 {
+        // // The first part: Comparison of access vs page savings
+        // // dpcow_dpeff
+        // // run different percentage of page accesses and calculate page savings
+        // // Max 50 Pages
+        // // Can't use files due to QEMU vm file system.
+        // for (int i = 1; i < 50; i++)           // Touching every page
+        // {
+        //         // Input: pages_per_access
+        //         int pages_per_access = i;
+        //         char buffer[20];
+        //         itoa(pages_per_access, buffer);
 
-        int a = fork();
-        if (a == 0)
+        //         if (fork() == 0)
+        //         {
+        //                 printf("i: %d ", i);
+        //                 printf(" | ");
+        //                 char *args[] = {"dpcow_dpeff", buffer, "0", 0};
+        //                 exec("dpcow_dpeff", args);
+        //                 exit(1);
+        //         }
+        //         wait(0);
+        // }
+
+        // printf("\n------COW Feature Testing-------\n");
+        // printf("\n------COW heap written to vs pages saved-------\n");
+
+        // // dpcow_encow
+        // // run different percentage of writes and calculate page savings
+        // // 10 children
+        // // 100 pages allocated in the parent, we decide how % of heap to write to in every children.
+        // #define CONST_CHILDREN "10"
+        // // 1 to 100 write percentage
+        // for (int i = 1; i < 100; i++)           // Touching every page
+        // {
+        //         // Input: write percentage
+        //         int write_perc = i;
+        //         char buffer[20];
+        //         itoa(write_perc, buffer);
+
+        //         if (fork() == 0)
+        //         {
+        //                 printf("i: %d ", i);
+        //                 printf(" | ");
+        //                 char *args[] = {"dpcow_encow", CONST_CHILDREN, buffer, "0", 0};
+        //                 exec("dpcow_encow", args);
+        //                 exit(1);
+        //         }
+        //         wait(0);
+        // }
+        
+
+        // The second part: Comparison of extra faults and extra allocations
+
+        // DP and COW: 
+        // Tracking extra faults and allocations for sample load
+        for (int i = 1; i < 50; i++)           // Touching every page
         {
-                int arr[100000];
-                for (int i = 0; i < 100000; i++)
+                // Input: pages_per_access
+                int pages_per_access = i;
+                char buffer[20];
+                itoa(pages_per_access, buffer);
+
+                if (fork() == 0)
                 {
-                        arr[i] = i;
+                        printf("i: %d ", i);
+                        printf(" | ");
+                        char *args[] = {"dpcow_dpeff", buffer, "1", 0};
+                        exec("dpcow_dpeff", args);
+                        exit(1);
                 }
+                wait(0);
+        }
+        
+        printf("\n ------COW extra faults----- \n");
+
+        // COW extra faults
+        #define CONST_CHILDREN "10"
+        // 1 to 100 write percentage
+        for (int i = 1; i < 100; i++)           // Touching every page
+        {
+                // Input: write percentage
+                int write_perc = i;
+                char buffer[20];
+                itoa(write_perc, buffer);
+
+                if (fork() == 0)
+                {
+                        printf("i: %d ", i);
+                        printf(" | ");
+                        char *args[] = {"dpcow_encow", CONST_CHILDREN, buffer, "1", 0};
+                        exec("dpcow_encow", args);
+                        exit(1);
+                }
+                wait(0);
         }
 
-        kill(a);
-        printf("Process og number %d\n", a);
-        int actual_thing = 0;
-        wait(&actual_thing);
-        printf("Waited process number%d\n", actual_thing);
+
+        // Tracking Total time
+                // This would be just putting the start and end cpu cycles
+                // on the outside of each operation and doing a loop
+        // Tracking total CPU cycles spent on allocations
+                // This would be making another variable and then 
+                // tracking the individual allocation / fault cycles spent
+
+        // DP: Tracking total time
+        for (int i = 1; i < 50; i++)
+        {
+                // Input: pages_per_access
+                int pages_per_access = i;
+                char buffer[20];
+                itoa(pages_per_access, buffer);
+                
+                if (fork() == 0)
+                {
+                        printf("i: %d ", i);
+                        printf(" | ");
+                        char *args[] = {"dpcow_dpeff", buffer, "1", 0};
+                        exec("dpcow_dpeff", args);
+                        exit(1);
+                }
+                wait(0);
+        }
+
+        // int a = fork();
+        // if (a == 0)
+        // {
+        //         int arr[100000];
+        //         for (int i = 0; i < 100000; i++)
+        //         {
+        //                 arr[i] = i;
+        //         }
+        // }
+
+        // kill(a);
+        // printf("Process og number %d\n", a);
+        // int actual_thing = 0;
+        // wait(&actual_thing);
+        // printf("Waited process number%d\n", actual_thing);
 
 
         //////// SBRKFAIL
@@ -167,6 +322,7 @@ int main(int argc, char *argv[])
         // exit(0);
 }
 
+
 // void print_memory_statistics(struct memstat *s, int i, int start_time)
 // {
 //         getmemstat(s);
@@ -176,4 +332,3 @@ int main(int argc, char *argv[])
 //                s->total_allocated_pages, 
 //                s->total_allocations);
 // }
-

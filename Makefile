@@ -145,6 +145,8 @@ UPROGS=\
 	$U/_getreadcount\
 	$U/_test_set_tix\
 	$U/_test_lottery\
+	$U/_dpcow_dpeff\
+	$U/_dpcow_encow\
 
 fs.img: mkfs/mkfs README $(UPROGS)
 	mkfs/mkfs fs.img README $(UPROGS)
