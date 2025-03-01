@@ -361,14 +361,7 @@ int uvmcopy(pagetable_t old, pagetable_t new, uint64 sz)
                 }
                 if ((*pte & PTE_V) != 0)        // Case: Valid (Physically allocated) Page
                 {
-                        // NEW NEW NEW logic
-                        // if page is PTE_W = 1 (originally writable)
-                                // set the PTE_C = 1 and PTE_W = 0
-                        // if page is PTE_W = 0 (originally not even writable)
-                                // set PTE_C = 0 and PTE_W = 0
-                        // original logic
-                        
-                        // NEW NEW NEW NEW logic (for nested forks of preserving cow pages)
+                        // Cases:
                         // readonly (PTE_C=0 and PTE_W=0) 
                                 // same logic, do a reference to the same page, don't set cow bits
                                 // reference add

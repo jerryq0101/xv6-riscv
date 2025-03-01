@@ -12,7 +12,7 @@ Memory management is one of the core responsibilities of an operating system ker
 
 ## Implementation Details
 
-Sounds simple until now right? HAHAHAHAH. no.
+Sounds simple until now right? AAHAHHAHA. no.
 
 ### Demand Paging
 
@@ -38,7 +38,7 @@ Demand paging was implemented through modifications to several key components:
 
 3. **Memory Operations**:
 
-   Ok, the other side of this is the kernel space. Since the kernel can handle a syscall and also write to user space pages, it may also write to demand pages. The kernel space will not trigger a usertrap, but a kerneltrap. Therefore, we have to do necessary demand page handling in the functions that carries out the syscall operations in kernel space.
+   Ok, we now have to consider kernel space writes. Since the kernel can handle a syscall and also write to user space pages, it may also write to demand pages. The kernel space will not trigger a usertrap, but a kerneltrap panic (which we don't want). Therefore, we have to do necessary demand page handling in the functions that carries out the syscall operations in kernel space.
 
    </strong>Modified `copyout(...)`, `copyin(...)`, and `copyinstr(...)` in `vm.c` to handle demand-paged memory</strong>
    - These parts required a similar process of the page fault handler. Since involving each of these functions count as a "touch" to the page, by definition of demand paging, we would be allocating it. Therefore, in a helper function `walkaddr_demand_paged`, what we do is to first find the pte, check if its demand paged => allocate physical memory for it, and check validity of permissions. This helper allows the top level function `copyout` to treat the page as an already allocated page, which we can then copy kernel syscall data into.
@@ -62,7 +62,7 @@ Copy-on-Write was implemented through the following changes:
 1. **Page Table Entry Modifications**:
    
    <strong>Added a custom `PTE_C` (COW) flag to mark pages shared through copy-on-write</strong>
-   - Similar to the demand paging signifier PTE_D, we needed one for this process when pages are shared at `uvmcopy` in `vm.c`. 
+   - Similar to the demand paging signifier PTE_D, we needed one for this process when pages are shared at `uvmcopy` in `vm.c`.
 
 2. **Fork Modifications**:
    
@@ -92,10 +92,10 @@ Copy-on-Write was implemented through the following changes:
 
 5. **Reference Counting**:
 
-   Ok, now we have the signal for the creation of COW pages, how do we clean them up, if they are not allocated? What if many processes refer to the same physical address? - we gotta know if we should free the physical address (PA) or not. Therefore, aside from adding a `PTE_C` bit to the PTE, we also needed to track how many references a single PA has to both not break operations of different processes or leak memory.
+   Ok, now we have the process the creation of COW pages and the writing process, how do we clean up? What if many processes refer to the same physical address? - we gotta know if we should free the physical address (PA) or not. References are also needed for writing - if there is only one reference to this physical page, then we can write to it, no need to allocate another one. Therefore, aside from adding a `PTE_C` bit to the PTE, we also needed to track how many references a single PA has: To not write over other process memory, and at termination, leak memory. 
 
    <strong>Implemented a global kernel reference counter to track how many processes share each physical page</strong>
-   - This is in `pa_track.h` hosts an array of `uint cow_refcount[PHYS]` to track the number of cow references for a PA.
+   - This is in `pa_track.h` which hosts an array of `uint cow_refcount[PHYS]` to track the number of cow references for a PA.
    - This is a global overhead in kernel memory space and it is also an overhead to the individual operations that need to update and check `cow_refcount[pa]`
    - Note that a lock is needed for this since the array is shared for all processes.
 
@@ -108,17 +108,46 @@ Copy-on-Write was implemented through the following changes:
 
 ## Performance Measurements
 
-I implemented statistics gathering to measure the impact of these optimizations:
+Despite the behaviour being predictable, I've implemented statistics to measure the behaviour of demand paging and copy on write. I was not able to measure time due to the precision of `uptime()` in xv6, which only measures ticks and is only accurate to about ~10ms. I am planning to measure CPU cycles in a future implementation.
 
-### Demand Paging Metrics:
-- Total pages allocated over time
-- Memory utilization efficiency (comparing traditional vs. demand paging)
-- Page fault handling overhead
+### For a demand paging workload (in `dpcow_dpeff.c`) we can evaluate its strengths and weaknesses in these three graphs.
 
-### Copy-on-Write Metrics:
-- Memory savings from shared pages
-- Duplication frequency under different workloads
-- Performance impact of COW overhead vs. memory savings
+![Demand Paging Workload: Pages Saved vs Percentage of Heap Touched](./graphs/dp_pages_heaptouch_vs_pagesave.png)
+(Figure 1)
+
+This demonstrates the space efficiency that is possible from sparse read/write workloads using demand paging.
+
+![Demand Paging: Page faults vs Percentage of Heap Touched](./graphs/dp_heaptouch_vs_pagefaults.png)
+(Figure 2)
+
+This demonstrates time efficiency overhead of demand paging, the amount of additional page faults to allocate pages increases (Note: only `usertrap` is counted here because a kernel syscall will context switch anyway).
+
+![Demand Paging: Page faults vs Percentage of Heap Touched](./graphs/dp_heaptouch_vs_allocationops.png)
+(Figure 3)
+
+The dynamic number of allocation operations can be viewed as a pro and a con. Pro-the OS has less work <strong>in total</strong> since it allocates one by one. Con-the OS will have an extra step for each memory touch.
+
+Whether this is a pro or a con depends on the specific operation being carried out (E.g. HFT may care more about speed of a single trade vs speed of a program sequence, E.g. Training a model would be better if the time taken is overall less). In general, we could care more about total runtime in total for the program. Therefore, more of a pro than a con.
+
+### For a Copy on Write workload (in `dpcow_encow.c`) we can evaluate its strengths and weaknesses in these three graphs.
+
+![Copy on Write: Percentage Children's Heap Written to vs KB Saved from Allocation](./graphs/cow_heapwrite_vs_pagesaved.png)
+(Figure 4)
+
+This demonstrates the space efficiency that is possible from sparse read/write in children workloads.
+
+![Copy on Write: Percentage Children's Heap Written to vs Page Faults](./graphs/cow_heapwrite_vs_pagefault.png)
+(Figure 5)
+
+This demonstrates time efficiency overhead of copy on write, similar to demand paging. Say you have a 50% utilization of the heap, you'd have 15X more page faults than immediate allocation. 
+
+However, this impact on my riscv-xv6 qemu simulation is not noticable quantitatively when measured with ticks. Ticks are accurate to about ~10ms. Therefore, the cost of page faulting has <= 10ms of impact.
+
+![Copy on Write: Percentage Children's Heap Written to vs Page Faults](./graphs/cow_heapwrite_vs_allocationops.png)
+(Figure 6)
+
+[Similar discussion to Demand Paging above]
+
 
 ## Challenges Overcome
 
@@ -126,13 +155,41 @@ Several significant technical challenges were addressed during development:
 
 1. **TLB Coherence**: Ensuring TLB was properly flushed after page table modifications to prevent stale entries from causing incorrect behavior.
 
+   This is relevant when updating PTE's for DP and COW. At situations when we first touch a DP page (`trap.c`'s `usertrap`, `vm.c`'s `copyout`), we allocate physical memory for it and also we alter the PTE to change the DP page into a normal allocated page, therefore should update the TLB.
+
+    When we fork for a COW page, we modify the PTE_C and PTE_W bits. On write, when we allocate for a PTE, we are modifying the PTE_C and PTE_W bits to change this into a normal page. Therefore we should update the TLB here as well.
+
 2. **Race Conditions**: Carefully managing reference counts and page allocations to prevent races between processes sharing COW pages.
+
+    `pa_track.h` implements the existing xv6 locking mechanisms to ensure that reference counts stay accurate for all processes, making sure that we make the correct COW decision for allocation in `access_trap_handler()` in `trap.c` and `kfree(...)` in `kalloc.c`.
+
+    Locks are also implemented for tracking `memory_statistics`
 
 3. **Chain Forking**: Handling scenarios where COW pages are further shared through subsequent forks.
 
+    This was one of the most difficult oversights I faced during development. I wondered why on fork, the PTE_C prividges were disappearing (This was `usertests copyout`). Initially, I thought it was a memory corruption caused by some bad memset. It was not. If I was writing to a readonly page of a child, it meant that I was doing something wrong for pages when spawning the child process.
+    
+    I realized that I had to preserve the original writability of each page when doing COW, since inside of each process space, there existed readonly (e.g. textdata and code) content, along side the user modifiable content. 
+    
+    So, I went to claude. The LLM told me to create a global hashtable storing the information, and due to each virtual address can have different permissions to each physical address I may have to create a separate AVL tree for each process to store `writability`.
+
+    After a bit of structuring, I thought, ok, lets implement this kernel add-on. But I asked myself: "woah woah woah, why the frick am I doing all this?" I realized that I could just initialize the readonly pages as PTE_C = 0, and not have them participate, since they can just be always shared (since non other operation will modify the pages).
+
+    This resulted in the finalized logic branch of `uvmcopy` in `vm.c`
+
 4. **Edge Cases**: Managing special cases like zero-length allocations, page boundary operations, and ensuring proper cleanup during process termination.
 
+   Write checks are implemented throughout the data moving functions `copyout`, `copyinstr`, and `copyin`.
+
 5. **Usertests Compatibility**: Resolving subtle interactions with existing xv6 usertests, particularly with memory-intensive operations.
+
+   One of the tests, `sbrkfail`, is technically still not resolved. This revealed an interesting timing-related issue. Without any modifications, the test would fail despite correct memory management logic.
+   
+   GDB analysis revealed a race condition between parent and child processes during memory allocation failure handling. When a child process fails to allocate memory, it attempts to exit, but the parent's `wait()` call sometimes executes before the child can fully transition to the zombie state.
+      
+   Curiously, adding a printf statement before the `wait()` call resolves the issue. Other delay mechanisms did not have the same effect, suggesting this isn't merely a timing issue.Notably, this behavior occurs in vanilla xv6 as well.
+
+   Further investigation revealed this is likely due to xv6's simplified scheduler and process state transition mechanisms. The printf syscall forces a context switch that allows the child process to complete its state transition to zombie before the parent's `wait()` call checks for it.
 
 ## Technical Design Decisions
 
@@ -155,11 +212,11 @@ The fault handler was designed to differentiate between:
 
 The implementation was thoroughly tested using:
 
-1. **Custom Test Programs**: Purpose-built programs to stress-test specific aspects of demand paging and COW.
+1. **Custom Test Programs**: Purpose-built programs to stress-test specific aspects of demand paging and COW. (`dpcow_cowtest.c`, `dpcow_basicmem.c`, `dpcow_exec.c`, `dpcow_forkch.c`, `dpcow_irl.c`)
 
-2. **Modified xv6 Usertests**: The standard xv6 test suite was used to ensure compatibility with existing code.
+2. **Modified xv6 Usertests**: The standard xv6 test suite was used to ensure compatibility with existing code. (`usertests.c`)
 
-3. **Performance Benchmarks**: Comparative tests measuring memory usage and runtime performance.
+3. **Performance Benchmarks**: Comparative tests measuring memory usage and runtime performance. (`dpcow_dpeff.c`, `dpcow_encow.c`) 
 
 ## Future Work
 
@@ -173,7 +230,7 @@ Potential extensions to this project include:
 
 ## Credits and References
 
-This implementation was inspired by and references:
+This implementation was built on and inspired by:
 - The xv6 operating system (MIT)
 - "Operating Systems: Three Easy Pieces" by Remzi H. Arpaci-Dusseau and Andrea C. Arpaci-Dusseau
 - Linux kernel's memory management subsystem
