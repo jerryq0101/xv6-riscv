@@ -1,6 +1,6 @@
 # Memory Optimization in xv6: Demand Paging and Copy-on-Write Implementation
 
-This project implements two fundamental memory management techniques in the xv6 operating system: demand paging and copy-on-write (COW). These techniques are cornerstones of modern operating systems, significantly improving memory space efficiency for sparse workloads.
+This project implements two fundamental memory management techniques in the xv6 operating system: demand paging and copy-on-write (COW). These techniques are cornerstones of modern operating systems, significantly improving memory space efficiency for particular workloads.
 
 ## Project Overview
 
@@ -119,7 +119,7 @@ Despite the behaviour being predictable, I've implemented statistics to measure 
 
 |DP Workload |COW workload|
 |-|-|
-|![Demand Paging Workload: Pages Saved vs Percentage of Heap Touched](./graphs/dp_pages_heaptouch_vs_pagesave.png) | ![Copy on Write: Percentage Children's Heap Written to vs KB Saved from Allocation](./graphs/cow_heapwrite_vs_pagesaved.png)|
+|![Demand Paging Workload: Pages Saved vs Percentage of Heap Touched](./graphs/dp_heaptouch_vs_pagesave.png) | ![Copy on Write: Percentage Children's Heap Written to vs KB Saved from Allocation](./graphs/cow_heapwrite_vs_pagesaved.png)|
 | (Figure 1) | (Figure 4)|
 
 Both Figure 1 and 4 demonstrates the space efficiency optimizations that is possible from sparse read/write workloads using demand paging and copy on write.
@@ -239,7 +239,7 @@ This implementation establishes a foundation for more advanced memory management
 ## Acknowledgements
 
 This implementation was built on and inspired by:
-- The xv6 operating system (MIT)
+- The xv6 operating system (MIT) (More in [ORIGINAL-README](./ORIGINAL-README))
 - "Operating Systems: Three Easy Pieces" by Remzi H. Arpaci-Dusseau and Andrea C. Arpaci-Dusseau
 - Linux kernel's memory management subsystem
 
@@ -248,4 +248,4 @@ This implementation was built on and inspired by:
 
 Ji (Jerry) Qi - ([jerryqi.xyz](jerryqi.xyz))
 
-Would love to hear f you have any comments / suggestions / feedback to this implementation.
+Would love to know if you have any comments / suggestions / feedback to this implementation.
