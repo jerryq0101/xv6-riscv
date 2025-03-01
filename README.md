@@ -1,6 +1,6 @@
 # Memory Optimization in xv6: Demand Paging and Copy-on-Write Implementation
 
-This project implements two fundamental memory management techniques in the xv6 operating system: demand paging and copy-on-write (COW). These techniques are cornerstones of modern operating systems, significantly improving memory efficiency.
+This project implements two fundamental memory management techniques in the xv6 operating system: demand paging and copy-on-write (COW). These techniques are cornerstones of modern operating systems, significantly improving memory space efficiency for sparse workloads
 
 ## Project Overview
 
@@ -89,7 +89,8 @@ While these concepts appear straightforward, their implementation required caref
 
 Despite the behaviour being predictable, I've implemented statistics to measure the behaviour of demand paging and copy on write. (I was not able to measure time due to the precision of `uptime()` in xv6, which only measures ticks and is only accurate to about ~10ms.)
 
-### For a demand paging workload - Figures 1-3 (in `dpcow_dpeff.c`) and a Copy on Write workload - Figures 4-6 (in `dpcow_encow.c`) we can evaluate its strengths and weaknesses in these 6 graphs.
+### A Demand Paging workload (`dpcow_dpeff.c`) - Figures 1-3 
+### A Copy on Write workload (`dpcow_encow.c`) - Figures 4-6
 
 |DP Workload |COW workload|
 |-|-|
@@ -97,6 +98,8 @@ Despite the behaviour being predictable, I've implemented statistics to measure 
 | (Figure 1) | (Figure 4)|
 
 Both Figure 1 and 4 demonstrates the space efficiency optimizations that is possible from sparse read/write workloads using demand paging and copy on write.
+
+</br>
 
 
 |DP Workload |COW Workload|
@@ -108,20 +111,60 @@ This demonstrates operational overhead of demand paging and COW, the amount of a
 
 For Figure 5, say you have a 50% utilization of the heap, you'd have 15X more page faults than immediate allocation. 
 
-However, this impact on my riscv-xv6 QEMU simulation is not noticable quantitatively when measured with ticks. Ticks are accurate to about ~10ms. Therefore, the cost of page faulting has <= 10ms of impact.
+However, this impact on my riscv-xv6 QEMU simulation is not noticable quantitatively when measured with ticks. Ticks are accurate to about ~10ms. Therefore, the total cost of page faulting has <= 10ms of impact per program in this test.
 
+Note that the cost of page faulting may differ for different machines.
+
+
+</br>
 
 |DP Workload |COW Workload|
 |-|-|
 |![Demand Paging: Page faults vs Percentage of Heap Touched](./graphs/dp_heaptouch_vs_allocationops.png) | ![Copy on Write: Percentage Children's Heap Written to vs Page Faults](./graphs/cow_heapwrite_vs_allocationops.png)|
 | (Figure 3) | (Figure 6)|
 
-The dynamic number of allocation operations can be viewed as a pro and a con. Pro-the OS has less work <strong>in total</strong> since it allocates one by one. Con-the OS will have an extra step for each memory write/touch.
+The dynamic number of allocation operations can be viewed as a pro and a con. 
+
+Pro: the OS has less work <strong>in total</strong> since it allocates one by one. 
+
+Con-the OS will have an extra step for each memory write/touch.
 
 Whether this extra step from lazy allocation is a pro or a con depends on the specific operation being carried out. HFT may care more about speed of a single trade vs speed of a program sequence. Training a model would be better if the time taken and resource needed is overall reduced.
 
 In general, we would care more about total runtime and the memory saved in total for the program. Therefore, more of a pro than a con.
 
+<br/>
+
+### Real-world Performance Analysis
+
+To evaluate the practical benefits of demand paging and copy-on-write in a realistic scenario, I developed a server workload simulation (`dpcow_irl.c`) that models a typical application with shared configuration data, code segments, and varying client memory access patterns.
+
+```
+Memory efficiency metrics:
+Total page faults:          34
+  Demand paging faults:     25
+  Copy-on-write faults:     9
+Total allocations:          63
+
+Memory sharing effectiveness:
+COW pages initially shared: 105
+COW pages eventually copied:8
+COW sharing efficiency:     93%
+
+Theoretical memory without DP/COW: 160 pages (640 KB)
+Actual memory with DP/COW:        63 pages (252 KB)
+Total memory savings:             97 pages (388 KB)
+Only 39% of the originally needed memory got allocated.
+```
+
+The results were compelling: in a five-client test scenario, only 8 out of 105 shared COW pages requiring copy (allocation).
+
+The system triggered 34 page faults across all clients (25 demand paging faults and 9 COW faults), demonstrating the expected overhead of these techniques.
+
+More importantly, the implementation reduced memory consumption from a theoretical 640KB (without DP/COW) to just 252KB - a 39% reduction in memory footprint. This test demonstrates that in common scenarios where processes share significant portions of memory and access sparse regions of their address space, demand paging and copy-on-write can dramatically improve system memory efficiency with minimal performance impact.
+
+
+<br/>
 
 ## Technical Challenges Overcome
 
@@ -134,7 +177,7 @@ Ensuring TLB coherence when modifying page table entries was critical for both d
 <details>
 <summary><strong>Reference Counting Race Conditions</strong></summary>
 
-Managing shared pages required careful synchronization to prevent race conditions. I implemented proper locking mechanisms in `pa_track.h` to ensure that reference counts remain accurate across concurrent operations from different processes.
+Managing shared pages required careful synchronization to prevent race conditions. I implemented proper locking mechanisms in `pa_track.h`'s `cow_ref_lock` to ensure that reference counts remain accurate across concurrent operations from different processes.
 </details>
 
 <details>
