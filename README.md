@@ -1,14 +1,39 @@
 # Memory Optimization in xv6: Demand Paging and Copy-on-Write Implementation
 
-This project implements two fundamental memory management techniques in the xv6 operating system: demand paging and copy-on-write (COW). These techniques are cornerstones of modern operating systems, significantly improving memory space efficiency for sparse workloads
+This project implements two fundamental memory management techniques in the xv6 operating system: demand paging and copy-on-write (COW). These techniques are cornerstones of modern operating systems, significantly improving memory space efficiency for sparse workloads.
 
 ## Project Overview
 
-Memory management is a critical responsibility of any operating system kernel. This implementation enhances xv6's memory subsystem by adding:
+Memory management is a critical responsibility of any operating system kernel. 
+
+<strong>This implementation attempts to improve xv6's original "instant-allocating" memory subsystem</strong> by adding:
 
 1. **Demand Paging**: Deferring physical memory allocation until a page is actually accessed, reducing memory waste for sparse access patterns.
 
 2. **Copy-on-Write (COW)**: Sharing memory pages between parent and child processes after fork() until a write occurs, avoiding unnecessary duplication.
+
+<br/>
+
+> Sounds simple until now right? HAHAHAh. no.
+
+
+
+## Table of Contents
+
+1. [Project Overview](#project-overview)
+2. [Technical Implementation](#technical-implementation)  
+   2.1. [Demand Paging Implementation](#demand-paging-implementation)    
+   2.2. [Copy-on-Write Implementation](#copy-on-write-implementation)  
+3. [Performance Analysis (Probably the most interesting part)](#performance-analysis)  
+   3.1. [Demand Paging Workload](#a-demand-paging-workload-dpcow_dpeffc---figures-1-3)  
+   3.2. [Copy-on-Write Workload](#a-copy-on-write-workload-dpcow_encowc---figures-4-6)  
+   3.3. [Real-world Performance Analysis](#real-world-performance-analysis)
+4. [Technical Challenges Overcome](#technical-challenges-overcome)
+5. [Testing Methodology](#testing-methodology)
+6. [Future Directions](#future-directions)
+7. [Acknowledgements](#acknowledgements)
+8. [Author](#author)
+
 
 ## Technical Implementation
 
@@ -221,4 +246,6 @@ This implementation was built on and inspired by:
 
 ## Author
 
-Ji (Jerry) Qi - University of Toronto Student 
+Ji (Jerry) Qi - ([jerryqi.xyz](jerryqi.xyz))
+
+Would love to hear f you have any comments / suggestions / feedback to this implementation.
