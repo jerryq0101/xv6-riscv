@@ -246,6 +246,6 @@ This implementation was built on and inspired by:
 
 ## Author
 
-Ji (Jerry) Qi - ([jerryqi.xyz](jerryqi.xyz))
+Ji (Jerry) Qi - ([jerryqi.xyz](https://jerryqi.xyz))
 
 Would love to know if you have any comments / suggestions / feedback to this implementation.
