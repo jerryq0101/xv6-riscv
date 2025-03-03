@@ -373,7 +373,6 @@ int uvmcopy(pagetable_t old, pagetable_t new, uint64 sz)
                                 // potentially previous physical addresses may be using this
                                 // this just turned into a COW page, so should only be two references
 
-                        // note to self: free logic and other copy on write logic should be the same
                         pte_t *child_pte = walk(new, i, 1);
                         if (child_pte == 0)
                         {
@@ -400,7 +399,7 @@ int uvmcopy(pagetable_t old, pagetable_t new, uint64 sz)
                         }
 
                         cow_pages++;
-                                                
+
                         // Update cow reference
                         uint64 pa = PTE2PA(*pte);
                         incr_refcount(pa);
@@ -466,18 +465,15 @@ int copyout(pagetable_t pagetable, uint64 dstva, char *src, uint64 len)
                 if (dstva + n >= MAXVA)
                         return -1;
                 
-                // At this point va0 is not valid
+                // At this point va0 is potentially demand paged
                 pte = walkaddr_demand_paged(pagetable, va0);
 
-                // WRONG hypothesis:
-                // Assumption that this check is enough to distinguish the PTE as an invalid PTE
-                // The code below this depends on the PTE being valid -> either COW or not COW.
                 if (pte == 0 || (*pte & PTE_U) == 0 || (*pte & PTE_R) == 0 || ((*pte & PTE_W) == 0 && (*pte & PTE_C) == 0) || (*pte & PTE_D) != 0 || (*pte & PTE_V) == 0)     // Demand Paging: Checks for cases where D and V are not valid
                 {
                         return -1;
                 }
 
-                // This check should assume that the above checks filters out validity already
+                // This check assumes that the above checks filters out validity
                 if ((*pte & PTE_V) && !(*pte & PTE_W) && (*pte & PTE_C))
                 {
 
