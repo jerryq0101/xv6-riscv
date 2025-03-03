@@ -186,7 +186,7 @@ The results were compelling: in a five-client test scenario, only 8 out of 105 s
 
 The system triggered 34 page faults across all clients (25 demand paging faults and 9 COW faults), demonstrating the expected overhead of these techniques.
 
-More importantly, the implementation reduced memory consumption from a theoretical 640KB (without DP/COW) to just 252KB - a 39% reduction in memory footprint. This test demonstrates that in common scenarios where processes share significant portions of memory and access sparse regions of their address space, demand paging and copy-on-write can dramatically improve system memory efficiency with minimal performance impact.
+More importantly, the implementation reduced memory consumption from a theoretical 640KB (without DP/COW) to just 252KB - a 61% reduction in memory footprint. This test demonstrates that in common scenarios where processes share significant portions of memory and access sparse regions of their address space, demand paging and copy-on-write can dramatically improve system memory efficiency with minimal performance impact.
 
 
 <br/>
@@ -246,6 +246,6 @@ This implementation was built on and inspired by:
 
 ## Author
 
-Ji (Jerry) Qi - ([jerryqi.xyz](jerryqi.xyz))
+Ji (Jerry) Qi - ([jerryqi.xyz](https://jerryqi.xyz))
 
 Would love to know if you have any comments / suggestions / feedback to this implementation.
