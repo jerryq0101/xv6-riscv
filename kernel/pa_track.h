@@ -3,7 +3,7 @@
 #include "memlayout.h"
 #include "types.h"
 
-#define NPHYS (PHYSTOP / 4096)        // Number of physical pages
+#define NPHYS (PHYSTOP / 4096)                                  // Number of physical pages
 
 // Global ref count tracker
 // This is a reference count, where a normal, non COW V page would have cow_refcount[ its pa ] = 1

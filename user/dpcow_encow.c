@@ -59,7 +59,6 @@ int main(int argc, char *argv[])
         getmemstat(&after);
 
         // Calculate metrics
-        
         if (faults)
         {
                 uint64 actual_allocated = after.total_allocations - before.total_allocations;
