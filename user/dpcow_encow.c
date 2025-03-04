@@ -29,8 +29,6 @@ int main(int argc, char *argv[])
                 memory[i] = i & 0xFF; // Initialize all memory
         }
 
-        // printf("Parent allocated %d pages\n", MEMORY_SIZE / 4096);
-
         // Create multiple children
         int pids[CHILD_COUNT];
         for (int c = 0; c < CHILD_COUNT; c++)

@@ -3,8 +3,6 @@
 #include "user/user.h"
 #pragma GCC diagnostic ignored "-Wunused-variable"
 
-// #include "kernel/fcntl.h"
-
 #define LARGE_SIZE (50 * 4096) // 50 pages (200KB)
 
 int main(int argc, char* argv[])
@@ -21,8 +19,6 @@ int main(int argc, char* argv[])
         struct memstat before, after;
         getmemstat(&before);
 
-        // printf("Allocating %d bytes...\n", LARGE_SIZE);
-
         // Allocate large buffer with malloc (increases heap size)
         char *buf = malloc(LARGE_SIZE);
         if (!buf)
@@ -32,7 +28,6 @@ int main(int argc, char* argv[])
         }
 
         // Only access every Nth page - this shows demand paging efficiency
-        // printf("Touching every %dth page...\n", ACCESS_INTERVAL);
         for (int i = 0; i < LARGE_SIZE; i += ACCESS_INTERVAL * 4096)
         {
                 buf[i] = i; // Touch this page
