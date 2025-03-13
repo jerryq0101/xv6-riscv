@@ -16,8 +16,8 @@ Memory management is a critical responsibility of any operating system kernel.
 
 > Sounds simple until now right? HAHAHAh. no.
 
-[Video Explanation of Demand Paging Process](https://www.loom.com/share/48725d5f658f430ebeb2c262a3022df3)<br/>
-[Video Explanation of Copy on Write Process](https://www.loom.com/share/dc63dadf34a849959a4ff6e1c3c3133f)
+[Video Explanation of my Demand Paging Process](https://www.loom.com/share/48725d5f658f430ebeb2c262a3022df3)<br/>
+[Video Explanation of my Copy on Write Process](https://www.loom.com/share/dc63dadf34a849959a4ff6e1c3c3133f)
 
 
 ## Table of Contents
