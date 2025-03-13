@@ -16,6 +16,7 @@ Memory management is a critical responsibility of any operating system kernel.
 
 > Sounds simple until now right? HAHAHAh. no.
 
+<video src="https://www.loom.com/share/48725d5f658f430ebeb2c262a3022df3" />
 
 
 ## Table of Contents
