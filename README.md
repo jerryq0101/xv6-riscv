@@ -154,7 +154,7 @@ The dynamic number of allocation operations can be viewed as a pro and a con.
 
 Pro: the OS has less work <strong>in total</strong> since it allocates one by one. 
 
-Con-the OS will have an extra step for each memory write/touch.
+Con: the OS will have an extra step for each memory write/touch.
 
 Whether this extra step from lazy allocation is a pro or a con depends on the specific operation being carried out. HFT may care more about speed of a single trade vs speed of a program sequence. Training a model would be better if the time taken and resource needed is overall reduced.
 
