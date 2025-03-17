@@ -1,4 +1,3 @@
-// dptest.c - Measures demand paging effectiveness
 #include "kernel/types.h"
 #include "user/user.h"
 #pragma GCC diagnostic ignored "-Wunused-variable"
