@@ -1,4 +1,3 @@
-// dpcow_cowefftest.c
 #include "kernel/types.h"
 #include "user/user.h"
 
