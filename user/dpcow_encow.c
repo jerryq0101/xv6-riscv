@@ -1,4 +1,4 @@
-// enhanced_cowtest.c - Tests COW with different write patterns
+// Tests COW with different write patterns and records performance
 #include "kernel/types.h"
 #include "user/user.h"
 #pragma GCC diagnostic ignored "-Wunused-variable"
