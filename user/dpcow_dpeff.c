@@ -1,3 +1,4 @@
+// Tests demand paging and records memory usage under the new implementation
 #include "kernel/types.h"
 #include "user/user.h"
 #pragma GCC diagnostic ignored "-Wunused-variable"
