@@ -1,4 +1,4 @@
-// exectest.c
+// Tests exec under DP and COW
 #include "kernel/types.h"
 #include "user/user.h"
 
