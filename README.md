@@ -247,7 +247,7 @@ This implementation was built on and inspired by:
 
 ## Author for this implementation
 
-Ji (Jerry) Qi - ([jerryqi.xyz](https://jerryqi.xyz))
-List of xv6-riscv authors in [ORIGINAL-README](./ORIGINAL-README)
+Ji (Jerry) Qi - ([jerryqi.xyz](https://jerryqi.xyz)) <br/>
+See List of xv6-riscv authors in [ORIGINAL-README](./ORIGINAL-README)
 
 Would love to know if you have any comments / suggestions / feedback to this implementation.
