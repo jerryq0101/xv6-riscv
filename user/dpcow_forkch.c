@@ -1,4 +1,4 @@
-// dpcow_forkch.c - fixed version
+// Tests Fork chaining under DP and COW
 #include "kernel/types.h"
 #include "user/user.h"
 
