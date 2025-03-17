@@ -242,12 +242,12 @@ This implementation establishes a foundation for more advanced memory management
 
 This implementation was built on and inspired by:
 - The xv6 operating system (MIT) (More in [ORIGINAL-README](./ORIGINAL-README))
-- "Operating Systems: Three Easy Pieces" by Remzi H. Arpaci-Dusseau and Andrea C. Arpaci-Dusseau
 - Linux kernel's memory management subsystem
+- "Operating Systems: Three Easy Pieces" by Remzi H. Arpaci-Dusseau and Andrea C. Arpaci-Dusseau
 
-
-## Author
+## Author for this implementation
 
 Ji (Jerry) Qi - ([jerryqi.xyz](https://jerryqi.xyz))
+List of xv6-riscv authors in [ORIGINAL-README](./ORIGINAL-README)
 
 Would love to know if you have any comments / suggestions / feedback to this implementation.
